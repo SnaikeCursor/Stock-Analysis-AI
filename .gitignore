@@ -1,0 +1,27 @@
+# Cached market data
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / OS
+.idea/
+.vscode/
+.cursor/
+.DS_Store
+
+# Artifacts
+*.log
+.coverage
+htmlcov/
