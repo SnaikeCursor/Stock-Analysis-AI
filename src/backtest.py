@@ -42,6 +42,7 @@ __all__ = [
     "evaluate_forward_multi",
     "evaluate_forward_multi_regime_aware",
     "evaluate_forward_quarterly_regime_aware",
+    "evaluate_forward_quarterly_regression",
     "evaluate_forward_regime_aware",
     "hit_rate_by_group",
     "plot_cumulative_returns",
@@ -131,6 +132,7 @@ class QuarterlyRebalancePeriod:
 def build_quarterly_rebalance_schedule(
     year: int,
     rebalance_freq: int,
+    cutoff_shift_days: int = 0,
 ) -> list[QuarterlyRebalancePeriod]:
     """Cutoffs and trading windows for regime-aware quarterly evaluation.
 
@@ -138,10 +140,13 @@ def build_quarterly_rebalance_schedule(
     cutoff; ``2`` → mid-year Jun-30 only; any other value → annual (single
     period, initial cutoff only, full calendar year).
 
+    When *cutoff_shift_days* > 0 every base cutoff is pushed forward by that
+    many calendar days (publication-lag shift).  Period boundaries derive from
+    the shifted cutoffs and may extend into the following calendar year.
+
     Returns
     -------
-    One :class:`QuarterlyRebalancePeriod` per sub-period, ordered from calendar
-    start to year-end.
+    One :class:`QuarterlyRebalancePeriod` per sub-period, ordered chronologically.
     """
     initial_cutoff = f"{year - 1}-12-31"
     if rebalance_freq == 1:
@@ -154,12 +159,21 @@ def build_quarterly_rebalance_schedule(
     all_cutoffs = [initial_cutoff] + mid_cutoffs
     n_periods = len(all_cutoffs)
 
-    period_starts: list[pd.Timestamp] = [pd.Timestamp(f"{year}-01-01")]
-    for mc in mid_cutoffs:
-        period_starts.append(pd.Timestamp(mc) + pd.Timedelta(days=1))
+    shift_td = pd.Timedelta(days=cutoff_shift_days)
+    shifted_cutoffs = [
+        str((pd.Timestamp(c) + shift_td).date()) for c in all_cutoffs
+    ]
 
-    period_ends: list[pd.Timestamp] = [pd.Timestamp(mc) for mc in mid_cutoffs]
-    period_ends.append(pd.Timestamp(f"{year}-12-31"))
+    shifted_mid_ts = [pd.Timestamp(c) + shift_td for c in mid_cutoffs]
+
+    period_starts: list[pd.Timestamp] = [
+        pd.Timestamp(shifted_cutoffs[0]) + pd.Timedelta(days=1),
+    ]
+    for smc in shifted_mid_ts:
+        period_starts.append(smc + pd.Timedelta(days=1))
+
+    period_ends: list[pd.Timestamp] = list(shifted_mid_ts)
+    period_ends.append(pd.Timestamp(f"{year}-12-31") + shift_td)
 
     periods: list[QuarterlyRebalancePeriod] = []
     for i in range(n_periods):
@@ -172,7 +186,7 @@ def build_quarterly_rebalance_schedule(
         periods.append(
             QuarterlyRebalancePeriod(
                 period_index=i,
-                cutoff=all_cutoffs[i],
+                cutoff=shifted_cutoffs[i],
                 period_start=period_starts[i],
                 period_end=period_ends[i],
                 label=label,
@@ -232,10 +246,17 @@ def _daily_close_matrix(
     ohlcv_by_ticker: dict[str, pd.DataFrame],
     tickers: list[str],
     year: int,
+    *,
+    start_date: pd.Timestamp | None = None,
+    end_date: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    """Aligned daily close prices for *tickers* within *year*."""
-    start = pd.Timestamp(f"{year}-01-01")
-    end = pd.Timestamp(f"{year}-12-31")
+    """Aligned daily close prices for *tickers* within *year*.
+
+    Optional *start_date* / *end_date* override the default Jan-01 / Dec-31
+    range (needed when shifted periods extend across year boundaries).
+    """
+    start = start_date if start_date is not None else pd.Timestamp(f"{year}-01-01")
+    end = end_date if end_date is not None else pd.Timestamp(f"{year}-12-31")
 
     series: list[pd.Series] = []
     for t in tickers:
@@ -519,6 +540,10 @@ def build_oos_features(
     ohlcv_by_ticker: dict[str, pd.DataFrame],
     fundamentals_by_ticker: dict[str, dict[str, Any]] | None = None,
     cutoff_date: str | None = None,
+    *,
+    eulerpool_quarterly: dict[str, list[dict]] | None = None,
+    eulerpool_profiles: dict[str, dict] | None = None,
+    publication_lag_days: int = 0,
 ) -> pd.DataFrame:
     """Build feature matrix for OOS prediction (shifted cutoff).
 
@@ -530,9 +555,19 @@ def build_oos_features(
     ohlcv_by_ticker
         Ticker → OHLCV DataFrame.
     fundamentals_by_ticker
-        Optional ticker → yfinance ``.info`` dict.
+        Optional ticker → yfinance ``.info`` dict (fallback when Eulerpool
+        is not provided).
     cutoff_date
         ISO date string; defaults to ``OOS_FEATURE_CUTOFF_DATE``.
+    eulerpool_quarterly
+        Optional ticker → list of Eulerpool quarterly records for PIT
+        fundamental feature construction.
+    eulerpool_profiles
+        Optional ticker → Eulerpool company profile dict for sector info.
+    publication_lag_days
+        When Eulerpool quarterly data is used, shifts the fundamental cutoff
+        backward by this many days (publication lag). See
+        :func:`features.build_feature_matrix`.
     """
     cutoff = cutoff_date if cutoff_date is not None else OOS_FEATURE_CUTOFF_DATE
     try:
@@ -541,7 +576,14 @@ def build_oos_features(
         from features import build_feature_matrix
 
     logger.info("Building OOS features with cutoff=%s", cutoff)
-    return build_feature_matrix(ohlcv_by_ticker, cutoff, fundamentals_by_ticker)
+    return build_feature_matrix(
+        ohlcv_by_ticker,
+        cutoff,
+        fundamentals_by_ticker,
+        eulerpool_quarterly=eulerpool_quarterly,
+        eulerpool_profiles=eulerpool_profiles,
+        publication_lag_days=publication_lag_days,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1872,6 +1914,334 @@ def evaluate_forward_quarterly_regime_aware(
             lo_metrics.get("max_drawdown", float("nan")),
             bm_metrics.get("cumulative_return", float("nan")),
             year_cost_bps,
+            beat_bm,
+        )
+
+    return QuarterlyForwardResult(
+        per_year=per_year,
+        quarterly_detail=pd.DataFrame(quarterly_rows),
+        turnover_log=pd.DataFrame(turnover_rows),
+        total_costs_bps=total_costs_all,
+        rebalance_freq=rebalance_freq,
+    )
+
+
+def evaluate_forward_quarterly_regression(
+    ohlcv_by_ticker: dict[str, pd.DataFrame],
+    fundamentals_by_ticker: dict[str, dict[str, Any]] | None = None,
+    *,
+    regression_result: Any,
+    oos_years: list[int],
+    costs_bps: float = 40.0,
+    top_n: int = 5,
+    rebalance_freq: int = 1,
+    hysteresis_buffer: int = 2,
+    max_position_weight: float | None = 0.30,
+    publication_lag_days: int = 0,
+    cutoff_shift_days: int = 0,
+) -> QuarterlyForwardResult:
+    """Walk-forward evaluation using a single regression model with rank-based hysteresis.
+
+    At each rebalancing cutoff the trained regressor predicts 1-month forward
+    returns for every ticker in the universe.  The portfolio is formed from
+    the top-*top_n* predicted returns, subject to rank-based hysteresis
+    (a position is retained as long as its rank stays within
+    ``top_n + hysteresis_buffer``).  Weights are proportional to predicted
+    returns (shifted non-negative, then capped at *max_position_weight*).
+
+    Parameters
+    ----------
+    ohlcv_by_ticker
+        Ticker -> OHLCV DataFrame.
+    fundamentals_by_ticker
+        Ticker -> yfinance ``.info`` dict (for feature building).
+    regression_result
+        Trained :class:`~regression_model.RegressionTrainResult`.
+    oos_years
+        Calendar years to evaluate.
+    costs_bps
+        One-way transaction costs in basis points (default 40).
+    top_n
+        Number of long positions to hold.
+    rebalance_freq
+        ``1`` = quarterly, ``2`` = semi-annual, else annual.
+    hysteresis_buffer
+        Retain a position while its rank stays within ``top_n + buffer``.
+    max_position_weight
+        Cap on any single position's weight (default 0.30 = 30 %).
+        ``None`` disables the cap.
+    publication_lag_days
+        Passed to :func:`build_oos_features` for PIT fundamentals (Eulerpool).
+    cutoff_shift_days
+        Shift all rebalancing cutoffs forward by this many calendar days
+        (publication-lag shift).  See :func:`build_quarterly_rebalance_schedule`.
+
+    Returns
+    -------
+    QuarterlyForwardResult
+    """
+    try:
+        from src.regression_backtest import _select_long_with_hysteresis
+        from src.regression_model import predict_returns
+    except ImportError:
+        from regression_backtest import _select_long_with_hysteresis
+        from regression_model import predict_returns
+
+    from scipy.stats import spearmanr
+
+    per_year: dict[int, ForwardTestResult] = {}
+    quarterly_rows: list[dict[str, Any]] = []
+    turnover_rows: list[dict[str, Any]] = []
+    total_costs_all = 0.0
+
+    for yr in oos_years:
+        schedule = build_quarterly_rebalance_schedule(
+            yr, rebalance_freq, cutoff_shift_days,
+        )
+        all_cutoffs = [p.cutoff for p in schedule]
+        n_periods = len(schedule)
+
+        # ---- predictions at each cutoff ----
+        period_preds: list[pd.Series] = []
+        universe_tickers: set[str] = set()
+
+        for cutoff in all_cutoffs:
+            X_oos = build_oos_features(
+                ohlcv_by_ticker,
+                fundamentals_by_ticker,
+                cutoff_date=cutoff,
+                publication_lag_days=publication_lag_days,
+            )
+            pred = predict_returns(regression_result, X_oos)
+            period_preds.append(pred)
+            universe_tickers.update(X_oos.index.tolist())
+
+        # ---- close & daily-return matrices covering all periods ----
+        all_tickers = sorted(universe_tickers)
+        data_start = schedule[0].period_start
+        data_end = schedule[-1].period_end
+        close = _daily_close_matrix(
+            ohlcv_by_ticker, all_tickers, yr,
+            start_date=data_start, end_date=data_end,
+        )
+        if close.empty:
+            logger.warning("No close data for year %d — skipping", yr)
+            continue
+        daily_ret_matrix = close.pct_change()
+
+        initial_pred = period_preds[0]
+        bm_tickers = [t for t in initial_pred.index if t in close.columns]
+        bm_daily = daily_ret_matrix[bm_tickers].mean(axis=1).dropna()
+        bm_daily.name = "benchmark"
+        bm_metrics = _compute_metrics(bm_daily)
+
+        # ---- period-by-period portfolio construction ----
+        current_portfolio: list[str] = []
+        portfolio_segments: list[pd.Series] = []
+        year_cost_bps = 0.0
+        ic_values: list[float] = []
+        precision_strict: list[float] = []
+        precision_top_quartile: list[float] = []
+        avg_actual_ranks: list[float] = []
+
+        for i in range(n_periods):
+            pred = period_preds[i]
+            seg = schedule[i]
+            p_start = seg.period_start
+            p_end = seg.period_end
+            q_label = seg.label
+            prev_portfolio = list(current_portfolio)
+
+            pred_tradeable = pred.reindex(
+                [t for t in pred.index if t in close.columns],
+            ).dropna()
+
+            current_portfolio = _select_long_with_hysteresis(
+                pred_tradeable, prev_portfolio, top_n, hysteresis_buffer,
+            )
+
+            n_swapped, turnover, sin, sout = turnover_from_portfolio_change(
+                prev_portfolio, current_portfolio, is_initial=(i == 0),
+            )
+            swapped_in, swapped_out = set(sin), set(sout)
+
+            # ---- period daily returns (return-proportional + capped) ----
+            period_dr = daily_ret_matrix.loc[p_start:p_end]
+            available = [t for t in current_portfolio if t in period_dr.columns]
+            if not available or period_dr.empty:
+                logger.warning(
+                    "Year %d period %d: no portfolio data — skipping", yr, i,
+                )
+                continue
+
+            pred_score = pred.reindex(available) - pred.reindex(available).min() + 1e-12
+            w = _capped_proba_weights(pred_score, available, max_position_weight)
+            segment = (period_dr[available] * w).sum(axis=1).dropna()
+            segment.name = "portfolio"
+            if segment.empty:
+                continue
+
+            # ---- transaction costs ----
+            period_cost_bps = 0.0
+            if i == 0:
+                segment.iloc[0] -= costs_bps / 10_000.0
+                period_cost_bps += costs_bps
+            elif n_swapped > 0:
+                rebal_cost_bps = turnover * costs_bps * 2
+                segment.iloc[0] -= rebal_cost_bps / 10_000.0
+                period_cost_bps += rebal_cost_bps
+
+            if i == n_periods - 1:
+                segment.iloc[-1] -= costs_bps / 10_000.0
+                period_cost_bps += costs_bps
+
+            year_cost_bps += period_cost_bps
+            portfolio_segments.append(segment)
+
+            # ---- IC & Precision@N ----
+            period_close = close.loc[p_start:p_end]
+            if len(period_close) >= 2:
+                actual_period_ret = period_close.iloc[-1] / period_close.iloc[0] - 1
+                common_ic = pred_tradeable.index.intersection(
+                    actual_period_ret.dropna().index,
+                )
+                if len(common_ic) >= 5:
+                    corr, _ = spearmanr(
+                        pred_tradeable.reindex(common_ic).values,
+                        actual_period_ret.reindex(common_ic).values,
+                    )
+                    ic_values.append(float(corr))
+
+                    actual_sorted = actual_period_ret.reindex(common_ic).sort_values(ascending=False)
+                    actual_top_n = set(actual_sorted.head(top_n).index)
+                    actual_top_quartile = set(
+                        actual_sorted.head(max(1, len(common_ic) // 4)).index,
+                    )
+
+                    picks = set(available)
+                    n_strict = len(picks & actual_top_n)
+                    n_loose = len(picks & actual_top_quartile)
+                    precision_strict.append(n_strict / top_n)
+                    precision_top_quartile.append(n_loose / top_n)
+
+                    actual_ranks = actual_period_ret.reindex(common_ic).rank(ascending=False)
+                    pick_ranks = [float(actual_ranks.loc[t]) for t in available if t in actual_ranks.index]
+                    if pick_ranks:
+                        avg_actual_ranks.append(float(np.mean(pick_ranks)))
+
+            # ---- logging & detail rows ----
+            seg_m = _compute_metrics(segment)
+
+            quarterly_rows.append({
+                "year": yr,
+                "quarter": q_label,
+                "cutoff": all_cutoffs[i],
+                "start": str(p_start.date()),
+                "end": str(p_end.date()),
+                "n_positions": len(available),
+                "n_swapped": n_swapped,
+                "turnover_pct": turnover * 100,
+                "cost_bps": period_cost_bps,
+                "cum_return": seg_m["cumulative_return"],
+                "sharpe": seg_m["sharpe_ratio"],
+                "max_dd": seg_m["max_drawdown"],
+                "n_trading_days": seg_m["n_trading_days"],
+            })
+
+            turnover_rows.append({
+                "year": yr,
+                "quarter": q_label,
+                "cutoff": all_cutoffs[i],
+                "n_swapped": n_swapped,
+                "turnover_pct": turnover * 100,
+                "cost_bps": period_cost_bps,
+                "held": list(available),
+                "swapped_in": sorted(swapped_in),
+                "swapped_out": sorted(swapped_out),
+            })
+
+            w_info = (
+                f" weights=[{', '.join(f'{t}:{v:.0%}' for t, v in w.items())}]"
+            )
+            logger.info(
+                "Regression hysteresis: year=%d %s kept %d/%d, replaced %d "
+                "(turnover=%.0f%%, cost=%.0fbps)%s",
+                yr,
+                q_label,
+                len(available) - n_swapped if i > 0 else 0,
+                len(available),
+                n_swapped,
+                turnover * 100,
+                period_cost_bps,
+                w_info,
+            )
+
+        # ---- concatenate segments → full year ----
+        if portfolio_segments:
+            full_year_ret = pd.concat(portfolio_segments)
+            full_year_ret.name = "portfolio"
+        else:
+            full_year_ret = pd.Series(dtype=float, name="portfolio")
+
+        lo_metrics = _compute_metrics(full_year_ret)
+
+        # ---- regression metrics (IC + Precision@N) ----
+        mean_ic = float(np.nanmean(ic_values)) if ic_values else float("nan")
+        ic_std = float(np.nanstd(ic_values)) if len(ic_values) > 1 else float("nan")
+        mean_prec_strict = float(np.nanmean(precision_strict)) if precision_strict else float("nan")
+        mean_prec_quartile = float(np.nanmean(precision_top_quartile)) if precision_top_quartile else float("nan")
+        mean_avg_rank = float(np.nanmean(avg_actual_ranks)) if avg_actual_ranks else float("nan")
+
+        rets_oos = compute_oos_returns(ohlcv_by_ticker, year=yr)
+
+        classification: dict[str, Any] = {
+            "accuracy": float("nan"),
+            "f1_macro": float("nan"),
+            "f1_weighted": float("nan"),
+            "confusion_matrix": np.zeros((0, 0), dtype=int),
+            "report_dict": {},
+            "report_str": "",
+            "ic": mean_ic,
+            "ic_std": ic_std,
+            "ic_per_cutoff": list(ic_values),
+            "precision_at_n": mean_prec_strict,
+            "precision_top_quartile": mean_prec_quartile,
+            "avg_actual_rank": mean_avg_rank,
+        }
+
+        ftr = ForwardTestResult(
+            predictions=initial_pred,
+            actual_returns=rets_oos,
+            actual_groups=pd.Series(dtype=str),
+            long_only=lo_metrics,
+            long_short={
+                "cumulative_return": float("nan"),
+                "sharpe_ratio": float("nan"),
+                "max_drawdown": float("nan"),
+            },
+            benchmark=bm_metrics,
+            classification=classification,
+            hit_rates={},
+            daily_returns={"long_winners": full_year_ret, "benchmark": bm_daily},
+            costs_bps=year_cost_bps,
+        )
+        per_year[yr] = ftr
+        total_costs_all += year_cost_bps
+
+        beat_bm = lo_metrics.get(
+            "cumulative_return", float("nan"),
+        ) > bm_metrics.get("cumulative_return", float("nan"))
+        logger.info(
+            "Regression quarterly eval yr=%d freq=%d: cum=%.3f sharpe=%.2f "
+            "maxDD=%.3f bm=%.3f costs=%.0fbps IC=%.3f beat_bm=%s",
+            yr,
+            rebalance_freq,
+            lo_metrics.get("cumulative_return", float("nan")),
+            lo_metrics.get("sharpe_ratio", float("nan")),
+            lo_metrics.get("max_drawdown", float("nan")),
+            bm_metrics.get("cumulative_return", float("nan")),
+            year_cost_bps,
+            mean_ic,
             beat_bm,
         )
 

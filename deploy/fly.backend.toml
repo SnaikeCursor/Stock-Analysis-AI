@@ -1,0 +1,32 @@
+# Fly.io — backend API only
+# 1. fly volumes create data_volume --region fra --size 3
+# 2. cp deploy/fly.backend.toml fly.toml
+# 3. fly apps create stock-analysis-ai-api   # pick a unique name
+# 4. fly deploy
+#
+# App listens on PORT (Fly sets this from internal_port below).
+
+app = "stock-analysis-ai-api"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile.backend"
+
+[env]
+  PORT = "8000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "2048mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[[mounts]]
+  source = "data_volume"
+  destination = "/app/data"

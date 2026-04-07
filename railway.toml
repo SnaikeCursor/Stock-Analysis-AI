@@ -1,0 +1,17 @@
+# Railway — deploy the FastAPI backend as a Docker service.
+# In Railway: New Project → Deploy from repo → set root to this repository.
+# Add a persistent volume (or mount) at /app/data for SQLite, joblib models,
+# and OHLCV parquet cache so restarts keep state.
+#
+# Frontend: create a second Railway service using frontend/Dockerfile with
+# build args VITE_API_BASE_URL=<your backend public URL> and NGINX_CONF=nginx.static.conf,
+# or host the static build on any CDN.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.backend"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"

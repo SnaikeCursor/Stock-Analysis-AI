@@ -1,0 +1,28 @@
+# Fly.io — static UI (calls API URL baked at build time)
+# 1. cp deploy/fly.frontend.toml fly.toml
+# 2. fly apps create stock-analysis-ai-web
+# 3. fly deploy --build-arg VITE_API_BASE_URL=https://stock-analysis-ai-api.fly.dev
+#
+# Use your real Fly backend hostname (or custom domain). CORS on the API allows any origin.
+
+app = "stock-analysis-ai-web"
+primary_region = "fra"
+
+[build]
+  dockerfile = "frontend/Dockerfile"
+
+[build.args]
+  VITE_API_BASE_URL = "https://stock-analysis-ai-api.fly.dev"
+  NGINX_CONF = "nginx.static.conf"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

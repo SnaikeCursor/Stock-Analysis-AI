@@ -1,0 +1,36 @@
+# Stock Analysis AI — FastAPI backend (uvicorn)
+# Build from repository root: docker build -f Dockerfile.backend -t stock-analysis-backend .
+
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# OpenMP for numpy/scikit-learn/xgboost/lightgbm wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -r backend/requirements.txt
+
+COPY config.py .
+COPY src ./src
+COPY backend ./backend
+
+# Persist SQLite, joblib models, OHLCV parquet under ./data (bind mount or volume)
+RUN mkdir -p data/cache
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD sh -c 'curl -fsS "http://127.0.0.1:$${PORT:-8000}/api/health" || exit 1'
+
+# Railway / Fly.io set PORT; local Docker defaults to 8000
+CMD ["sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

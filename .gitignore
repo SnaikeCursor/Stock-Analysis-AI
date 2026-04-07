@@ -21,6 +21,9 @@ env/
 .cursor/
 .DS_Store
 
+# Secrets
+.env
+
 # Artifacts
 *.log
 .coverage

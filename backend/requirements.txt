@@ -1,0 +1,10 @@
+# Backend-specific dependencies (on top of the existing ML pipeline in requirements.txt)
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlalchemy>=2.0
+aiosqlite>=0.20
+apscheduler>=3.10
+pydantic>=2.0
+
+# Already in root requirements.txt but listed for clarity:
+# yfinance, pandas, numpy, scikit-learn, xgboost, lightgbm, joblib (via sklearn)

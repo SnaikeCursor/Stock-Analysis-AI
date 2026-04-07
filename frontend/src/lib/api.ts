@@ -1,0 +1,383 @@
+/**
+ * Typed fetch wrapper for the Stock Analysis AI FastAPI backend (`/api/*`).
+ * Set `VITE_API_BASE_URL` (e.g. `http://localhost:8000`) in `.env` for local dev.
+ */
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? 'http://localhost:8000'
+
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+async function parseJson<T>(res: Response): Promise<T> {
+  const text = await res.text()
+  if (!text) return undefined as T
+  return JSON.parse(text) as T
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...init?.headers,
+    },
+  })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new ApiError(res.status, body || res.statusText)
+  }
+
+  if (res.status === 204) return undefined as T
+
+  const contentType = res.headers.get('content-type')
+  if (contentType?.includes('application/json')) {
+    return parseJson<T>(res)
+  }
+
+  return undefined as T
+}
+
+function withJson(init?: RequestInit): RequestInit {
+  return {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+  }
+}
+
+// --- Types (aligned with backend Pydantic / dict responses) ---
+
+export type HealthResponse = {
+  status: string
+  data_loaded: boolean
+  model_loaded: boolean
+}
+
+export type DashboardSignal = {
+  id: number
+  cutoff_date: string
+  created_at: string | null
+  status: string
+}
+
+export type DashboardPosition = {
+  id: number
+  ticker: string
+  weight: number
+  entry_price: number | null
+  entry_date: string | null
+  current_price: number | null
+  pnl_pct: number | null
+}
+
+export type DashboardAlert = {
+  id: number
+  type: string
+  message: string
+  created_at: string | null
+}
+
+export type ModelInfo = {
+  phase: string
+  rebalance_freq: string
+  description: string
+}
+
+export type DashboardResponse = {
+  signal: DashboardSignal | null
+  positions: DashboardPosition[]
+  next_rebalancing: { date: string; days_until: number }
+  alerts: DashboardAlert[]
+  model_info?: ModelInfo | null
+}
+
+export type SignalPosition = {
+  ticker: string
+  weight: number
+  predicted_return: number
+  current_price?: number | null
+}
+
+export type SignalOut = {
+  id: number
+  cutoff_date: string
+  portfolio: SignalPosition[]
+  status: string
+  created_at: string | null
+  model_phase?: string
+  rebalance_freq?: string
+}
+
+export type GenerateSignalBody = {
+  cutoff_date?: string | null
+  top_n?: number
+  max_weight?: number
+}
+
+export type YearMetrics = {
+  cumulative_return: number
+  annualized_return: number
+  volatility: number
+  sharpe_ratio: number
+  max_drawdown: number
+  n_trading_days: number
+}
+
+export type YearPerformance = {
+  long_only: YearMetrics
+  benchmark: YearMetrics
+  costs_bps: number
+}
+
+export type HistoryPerformanceResponse = {
+  per_year: Record<string, YearPerformance>
+  total_costs_bps: number
+  rebalance_freq: number
+}
+
+export type QuarterlyDetail = {
+  year: number
+  quarter: string
+  cutoff: string
+  start: string
+  end: string
+  n_positions: number
+  n_swapped: number
+  turnover_pct: number
+  cost_bps: number
+  cum_return: number
+  sharpe: number
+  max_dd: number
+  n_trading_days: number
+}
+
+export type HistoryQuarterlyResponse = {
+  quarterly_detail: QuarterlyDetail[]
+  total_costs_bps: number
+}
+
+export type PositionDetail = {
+  id: number
+  ticker: string
+  weight: number
+  shares?: number | null
+  entry_price: number | null
+  entry_date: string | null
+  entry_total?: number | null
+  exit_price: number | null
+  exit_date: string | null
+  exit_total?: number | null
+  pnl_pct: number | null
+}
+
+export type PnlEntry = {
+  id: number
+  ticker: string
+  weight: number
+  shares: number | null
+  entry_price: number | null
+  entry_date: string | null
+  entry_total: number | null
+  current_price: number | null
+  current_value: number | null
+  pnl_pct: number | null
+  pnl_abs: number | null
+}
+
+/** Same row shape for dashboard positions and live P&L (interchangeable in tables). */
+export type LivePositionRow = DashboardPosition
+
+export type AlertOut = {
+  id: number
+  type: string
+  message: string
+  created_at: string | null
+  read: boolean
+}
+
+export type ClosePositionBody = {
+  exit_price: number
+  exit_date?: string | null
+}
+
+/** Partial update for `PUT /api/portfolio/positions/{id}` — aligns with backend `UpdatePositionRequest`. */
+export type UpdatePositionBody = {
+  shares?: number | null
+  entry_price?: number | null
+  entry_date?: string | null
+  exit_price?: number | null
+  exit_date?: string | null
+}
+
+export type ActivatePortfolioPositionInput = {
+  ticker: string
+  shares: number
+  entry_price: number
+  entry_date: string
+}
+
+/** `POST /api/portfolio/activate` — activate a PENDING signal with share counts and entry data. */
+export type ActivatePortfolioBody = {
+  signal_id: number
+  investment_amount: number
+  positions: ActivatePortfolioPositionInput[]
+}
+
+export type ActivatePortfolioResponse = {
+  signal_id: number
+  status: string
+  positions_activated: number
+  investment_amount: number
+}
+
+export type RebalanceProposalStatus = 'pending' | 'executed' | 'dismissed'
+
+/** One row inside `instructions` from `compute_rebalance_instructions` (backend JSON). */
+export type RebalanceInstructionRow = {
+  ticker: string
+  action: 'buy' | 'sell' | 'hold' | 'skip' | string
+  shares: number
+  estimated_price?: number
+  estimated_value?: number
+  reason?: string
+}
+
+export type RebalanceInstructionsPayload = {
+  portfolio_value: number
+  swap_count: number
+  instructions: RebalanceInstructionRow[]
+  note?: string
+}
+
+/** `GET /api/portfolio/rebalance-proposal` — pending proposal, or null if none. */
+export type RebalanceProposal = {
+  id: number
+  old_signal_id: number
+  new_signal_id: number
+  created_at: string | null
+  status: RebalanceProposalStatus
+  portfolio_value: number | null
+  swap_count: number | null
+  instructions: RebalanceInstructionRow[]
+  note: string | null
+}
+
+export type ExecutedTrade = {
+  ticker: string
+  action: string
+  shares: number
+  price: number
+  date: string
+}
+
+/** `POST /api/portfolio/execute-rebalance` — confirm executed swaps. */
+export type ExecuteRebalanceBody = {
+  rebalance_id: number
+  executed_trades: ExecutedTrade[]
+}
+
+export type ExecuteRebalanceResponse = {
+  rebalance_id: number
+  status: RebalanceProposalStatus
+  signal: SignalOut
+  positions: PositionDetail[]
+}
+
+export type PortfolioHistorySignal = {
+  signal_id: number
+  cutoff_date: string
+  status: string
+  created_at: string | null
+  positions: PositionDetail[]
+}
+
+// --- API ---
+
+export const api = {
+  getHealth: () => request<HealthResponse>('/api/health'),
+
+  getDashboard: () => request<DashboardResponse>('/api/dashboard'),
+
+  generateSignal: (body: GenerateSignalBody = {}) =>
+    request<SignalOut>('/api/signals/generate', withJson({ method: 'POST', body: JSON.stringify(body) })),
+
+  getLatestSignal: () => request<SignalOut | null>('/api/signals/latest'),
+
+  getSignalHistory: () => request<SignalOut[]>('/api/signals/history'),
+
+  getPerformance: (startYear = 2015, endYear = 2025) =>
+    request<HistoryPerformanceResponse>(
+      `/api/history/performance?${new URLSearchParams({
+        start_year: String(startYear),
+        end_year: String(endYear),
+      })}`,
+    ),
+
+  getQuarterly: (startYear = 2015, endYear = 2025) =>
+    request<HistoryQuarterlyResponse>(
+      `/api/history/quarterly?${new URLSearchParams({
+        start_year: String(startYear),
+        end_year: String(endYear),
+      })}`,
+    ),
+
+  getPortfolio: () => request<PositionDetail[]>('/api/portfolio'),
+
+  getPortfolioPnl: () => request<PnlEntry[]>('/api/portfolio/pnl'),
+
+  getPortfolioHistory: () => request<PortfolioHistorySignal[]>('/api/portfolio/history'),
+
+  closePosition: (positionId: number, body: ClosePositionBody) =>
+    request<PositionDetail>(
+      `/api/portfolio/positions/${positionId}/close`,
+      withJson({ method: 'PUT', body: JSON.stringify(body) }),
+    ),
+
+  updatePosition: (positionId: number, body: UpdatePositionBody) =>
+    request<PositionDetail>(
+      `/api/portfolio/positions/${positionId}`,
+      withJson({ method: 'PUT', body: JSON.stringify(body) }),
+    ),
+
+  activatePortfolio: (body: ActivatePortfolioBody) =>
+    request<ActivatePortfolioResponse>(
+      '/api/portfolio/activate',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
+    ),
+
+  getRebalanceProposal: () =>
+    request<RebalanceProposal | null>('/api/portfolio/rebalance-proposal'),
+
+  executeRebalance: (body: ExecuteRebalanceBody) =>
+    request<ExecuteRebalanceResponse>(
+      '/api/portfolio/execute-rebalance',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
+    ),
+
+  dismissRebalance: (rebalanceId: number) =>
+    request<{ id: number; status: string; message: string }>(
+      '/api/portfolio/dismiss-rebalance',
+      withJson({ method: 'POST', body: JSON.stringify({ rebalance_id: rebalanceId }) }),
+    ),
+
+  getAlerts: (unreadOnly = false) =>
+    request<AlertOut[]>(`/api/alerts?${new URLSearchParams({ unread_only: String(unreadOnly) })}`),
+
+  markAlertRead: (alertId: number) =>
+    request<AlertOut>(`/api/alerts/${alertId}/read`, { method: 'PUT' }),
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE
+}

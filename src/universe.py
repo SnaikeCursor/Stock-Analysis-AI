@@ -461,3 +461,63 @@ def filter_by_min_volume(
         if float(turnover.mean()) >= min_daily_volume_chf:
             out.append(ticker)
     return sorted(out)
+
+
+def filter_liquid_at_cutoff(
+    ohlcv_by_ticker: dict[str, pd.DataFrame],
+    cutoff_date: str,
+    min_daily_volume_chf: float,
+    *,
+    lookback_days: int = 126,
+    price_col: str = "Close",
+    volume_col: str = "Volume",
+) -> set[str]:
+    """Return tickers whose **median** daily turnover in the trailing window
+    before *cutoff_date* meets the *min_daily_volume_chf* threshold.
+
+    Unlike :func:`filter_by_min_volume` (full-history mean, applied once at
+    load time), this function re-evaluates liquidity per cutoff so that IPOs
+    only enter the universe after listing and delistings exit after their
+    last active trading date — a dynamic-universe proxy for index-constituent
+    data that is unavailable on the free tier.
+
+    Parameters
+    ----------
+    ohlcv_by_ticker
+        Ticker -> OHLCV DataFrame.
+    cutoff_date
+        ISO date; only rows on or before this date are considered.
+    min_daily_volume_chf
+        Minimum median daily notional turnover in CHF.
+    lookback_days
+        Number of trailing trading days to evaluate (default 126 ≈ 6 months).
+    """
+    cutoff_ts = pd.Timestamp(cutoff_date)
+    eligible: set[str] = set()
+
+    for ticker, df in ohlcv_by_ticker.items():
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            continue
+        if price_col not in df.columns or volume_col not in df.columns:
+            continue
+
+        idx = pd.to_datetime(df.index)
+        mask = idx <= cutoff_ts
+        if not mask.any():
+            continue
+        window = df.loc[mask].tail(lookback_days)
+
+        if len(window) < 21:
+            continue
+
+        price = pd.to_numeric(window[price_col], errors="coerce")
+        vol = pd.to_numeric(window[volume_col], errors="coerce")
+        turnover = (price * vol).dropna()
+
+        if turnover.empty:
+            continue
+
+        if float(turnover.median()) >= min_daily_volume_chf:
+            eligible.add(ticker)
+
+    return eligible

@@ -390,8 +390,9 @@ def _prepare_regression_data(
     cv_folds: int | None,
     holdout_periods: int = 1,
     embargo_periods: int = 0,
+    drop_correlated_threshold: float | None = None,
 ) -> _PreparedRegressionData:
-    """Clean NaN targets, impute features, build train/test split and CV splitter."""
+    """Clean NaN targets, build train/test split, median-impute from train only, optional corr filter."""
     n_cv = CV_FOLDS if cv_folds is None else cv_folds
     y_arr = np.asarray(y, dtype=float)
 
@@ -404,9 +405,6 @@ def _prepare_regression_data(
     pl_clean: np.ndarray | None = None
     if period_labels is not None:
         pl_clean = np.asarray(period_labels)[valid]
-
-    X_imp, medians = _impute_median(X_clean)
-    feature_names = list(X_imp.columns)
 
     pl_train: np.ndarray | None = None
     pl_test: np.ndarray | None = None
@@ -423,21 +421,21 @@ def _prepare_regression_data(
         train_mask = ~np.isin(pl_clean, list(holdout_set))
         test_mask = np.isin(pl_clean, list(holdout_set))
 
-        X_train = X_imp[train_mask].copy()
-        X_test = X_imp[test_mask].copy()
+        X_train = X_clean[train_mask].copy()
+        X_test = X_clean[test_mask].copy()
         y_train = y_clean[train_mask]
         y_test = y_clean[test_mask]
         pl_train = pl_clean[train_mask]
         pl_test = pl_clean[test_mask]
 
         logger.info(
-            "Walk-forward split: %d train (%d periods) / %d test (%d holdout periods: %s), %d features",
+            "Walk-forward split: %d train (%d periods) / %d test (%d holdout periods: %s), %d raw features",
             len(X_train),
             len(unique_periods) - n_holdout,
             len(X_test),
             n_holdout,
             ", ".join(str(p) for p in holdout_periods_list),
-            len(feature_names),
+            X_train.shape[1],
         )
 
         cv: Any = ExpandingWindowSplit(
@@ -454,23 +452,49 @@ def _prepare_regression_data(
                 n_cv,
             )
             cv = TimeSeriesSplit(n_splits=n_cv)
+        elif cv_folds is not None and n_splits > cv_folds:
+            logger.info(
+                "Expanding-window CV would produce %d splits; capping to "
+                "TimeSeriesSplit(n_splits=%d) for efficiency.",
+                n_splits,
+                cv_folds,
+            )
+            cv = TimeSeriesSplit(n_splits=cv_folds)
     else:
-        split_idx = int(len(X_imp) * 0.75)
-        X_train = X_imp.iloc[:split_idx].copy()
-        X_test = X_imp.iloc[split_idx:].copy()
+        split_idx = int(len(X_clean) * 0.75)
+        X_train = X_clean.iloc[:split_idx].copy()
+        X_test = X_clean.iloc[split_idx:].copy()
         y_train = y_clean[:split_idx]
         y_test = y_clean[split_idx:]
         cv = TimeSeriesSplit(n_splits=n_cv)
         logger.info(
-            "Chronological split: %d train / %d test, %d features",
+            "Chronological split: %d train / %d test, %d raw features",
             len(X_train),
             len(X_test),
-            len(feature_names),
+            X_train.shape[1],
         )
 
+    X_train_imp, medians = _impute_median(X_train)
+    feature_names = list(X_train_imp.columns)
+    X_test_imp = _apply_imputation(X_test, medians, feature_names)
+
+    if drop_correlated_threshold is not None:
+        try:
+            from src.features import drop_correlated_features_train_test
+        except ImportError:
+            from features import drop_correlated_features_train_test
+
+        X_train_imp, X_test_imp, _dropped = drop_correlated_features_train_test(
+            X_train_imp,
+            X_test_imp,
+            threshold=drop_correlated_threshold,
+        )
+        feature_names = list(X_train_imp.columns)
+        medians = medians.reindex(feature_names)
+
     return _PreparedRegressionData(
-        X_train=X_train,
-        X_test=X_test,
+        X_train=X_train_imp,
+        X_test=X_test_imp,
         y_train=y_train,
         y_test=y_test,
         cv=cv,
@@ -500,6 +524,7 @@ def train_regressor(
     holdout_periods: int = 1,
     quantile_alpha: float | None = None,
     embargo_periods: int = 0,
+    drop_correlated_threshold: float | None = None,
 ) -> RegressionTrainResult:
     """Fit a regression model with expanding-window or time-series CV.
 
@@ -507,7 +532,7 @@ def train_regressor(
     ----------
     X
         Feature matrix (observation index, feature columns).  NaN is
-        median-imputed.
+        median-imputed from the training split only.
     y
         1-month forward returns (target vector, aligned with *X*).
     model_type
@@ -540,6 +565,10 @@ def train_regressor(
         Number of periods to skip between training and validation in
         expanding-window CV (purged walk-forward).  ``1`` leaves a
         1-month buffer to prevent information leakage.
+    drop_correlated_threshold
+        If set (e.g. ``0.85``), drop highly correlated feature pairs using
+        correlations fit on the **training** set only, then apply the same
+        column drops to the hold-out set.  ``None`` skips this step.
 
     Returns
     -------
@@ -567,6 +596,7 @@ def train_regressor(
         cv_folds=cv_folds,
         holdout_periods=holdout_periods,
         embargo_periods=embargo_periods,
+        drop_correlated_threshold=drop_correlated_threshold,
     )
 
     if model_type == "lgb":
@@ -647,6 +677,7 @@ def train_regression_ensemble(
     weights: tuple[float, float] = (0.5, 0.5),
     holdout_periods: int = 1,
     embargo_periods: int = 0,
+    drop_correlated_threshold: float | None = None,
 ) -> RegressionTrainResult:
     """Train RF + XGBoost separately, then blend with weighted-average predictions.
 
@@ -677,6 +708,7 @@ def train_regression_ensemble(
         cv_folds=cv_folds,
         holdout_periods=holdout_periods,
         embargo_periods=embargo_periods,
+        drop_correlated_threshold=drop_correlated_threshold,
     )
 
     from xgboost import XGBRegressor

@@ -54,6 +54,7 @@ __all__ = [
     "WalkForwardSplit",
     "evaluate_predictions",
     "load_model",
+    "permutation_importance_walk_forward",
     "plot_confusion_matrix",
     "plot_cv_folds",
     "plot_model_comparison",
@@ -65,6 +66,8 @@ __all__ = [
     "refit_on_full_data",
     "save_model",
     "shap_explain",
+    "shap_explain_per_regime",
+    "shap_regime_summary",
     "train_classifier",
     "train_ensemble",
     "train_multi_quarter_ensemble",
@@ -297,7 +300,7 @@ def _prepare_train_classifier_data(
     feature_selection: bool,
     rfecv_min_features: int,
 ) -> _PreparedTrainData:
-    """Median-impute, encode labels, split, optional RFECV — shared by :func:`train_classifier` / :func:`train_ensemble`."""
+    """Encode labels, split, median-impute from train only, optional RFECV — shared by :func:`train_classifier` / :func:`train_ensemble`."""
     ts = (1.0 - TRAIN_TEST_SPLIT) if test_size is None else test_size
     n_cv = CV_FOLDS if cv_folds is None else cv_folds
 
@@ -307,9 +310,6 @@ def _prepare_train_classifier_data(
 
     if problem_type == "binary":
         y_clean = _to_binary_labels(y_clean)
-
-    X_imp, medians = _impute_median(X_clean)
-    feature_names = list(X_imp.columns)
 
     le = LabelEncoder()
     y_enc = le.fit_transform(y_clean.values)
@@ -332,7 +332,7 @@ def _prepare_train_classifier_data(
                                 np.where(np.isin(X.index, common))[0])] \
             if len(pl) == len(X) else pl
 
-        if len(pl_aligned) != len(X_imp):
+        if len(pl_aligned) != len(X_clean):
             pl_series = pd.Series(pl, index=X.index)
             pl_aligned = pl_series.loc[common].values
 
@@ -345,16 +345,16 @@ def _prepare_train_classifier_data(
         train_mask = pl_aligned != last_period
         test_mask = pl_aligned == last_period
 
-        X_train = X_imp[train_mask]
-        X_test = X_imp[test_mask]
+        X_train = X_clean[train_mask].copy()
+        X_test = X_clean[test_mask].copy()
         y_train = y_enc[train_mask]
         y_test = y_enc[test_mask]
         pl_train = pl_aligned[train_mask]
 
         logger.info(
-            "Walk-forward split: %d train (%d periods) / %d test (period %s), %d features",
+            "Walk-forward split: %d train (%d periods) / %d test (period %s), %d raw features",
             len(X_train), len(unique_periods) - 1, len(X_test),
-            last_period, len(feature_names),
+            last_period, X_train.shape[1],
         )
 
         wf_cv = WalkForwardSplit(pl_train, min_train_periods=min_train_periods)
@@ -373,7 +373,7 @@ def _prepare_train_classifier_data(
             logger.info("Walk-forward CV: %d splits", n_splits)
     else:
         X_train, X_test, y_train, y_test = train_test_split(
-            X_imp,
+            X_clean,
             y_enc,
             test_size=ts,
             random_state=random_state,
@@ -381,14 +381,20 @@ def _prepare_train_classifier_data(
         )
 
         logger.info(
-            "Split: %d train / %d test (%.0f%% hold-out), %d features",
+            "Split: %d train / %d test (%.0f%% hold-out), %d raw features",
             len(X_train),
             len(X_test),
             ts * 100,
-            len(feature_names),
+            X_train.shape[1],
         )
 
         cv = StratifiedKFold(n_splits=n_cv, shuffle=True, random_state=random_state)
+
+    X_train_imp, medians = _impute_median(X_train)
+    feature_names = list(X_train_imp.columns)
+    X_test_imp = _apply_imputation(X_test, medians, feature_names)
+    X_train = X_train_imp
+    X_test = X_test_imp
 
     selected_features: list[str] | None = None
     if feature_selection:
@@ -546,7 +552,8 @@ def train_classifier(
     Parameters
     ----------
     X
-        Feature matrix (ticker index, feature columns). NaN is median-imputed.
+        Feature matrix (ticker index, feature columns). NaNs are median-imputed
+        using training-split statistics only.
     y
         Class labels (``Winners`` / ``Steady`` / ``Losers``). When
         ``problem_type="binary"``, Steady and Losers are merged into *Rest*;
@@ -2004,6 +2011,263 @@ def shap_explain(result: TrainResult) -> dict[str, Any]:
         "mean_abs_shap": mean_abs_df,
         "explainer": explainer,
     }
+
+
+def shap_explain_per_regime(
+    regime_collection: RegimeModelCollection,
+) -> dict[str, dict[str, Any]]:
+    """SHAP analysis for each dedicated regime model (Bull/Bear/Sideways).
+
+    For each regime that has a dedicated :class:`MultiQuarterEnsembleResult`,
+    the first sub-model is used for SHAP explanation (TreeExplainer requires
+    a single estimator, not an ensemble-of-ensembles).
+
+    Returns
+    -------
+    dict
+        ``regime_label → shap_explain()``-style result dict.  Regimes using
+        the fallback model are included if a fallback exists.
+    """
+    results: dict[str, dict[str, Any]] = {}
+
+    for regime_label, mqe in regime_collection.regime_models.items():
+        if not mqe.sub_results:
+            logger.warning(
+                "SHAP per regime: %s has no sub-results — skipping",
+                regime_label.upper(),
+            )
+            continue
+
+        sub = mqe.sub_results[-1]
+        logger.info(
+            "SHAP per regime: explaining %s (%d features, period %s)",
+            regime_label.upper(),
+            len(sub.feature_names),
+            mqe.period_labels[-1] if mqe.period_labels else "?",
+        )
+        try:
+            results[regime_label] = shap_explain(sub)
+        except Exception as exc:
+            logger.warning(
+                "SHAP per regime: %s failed — %s", regime_label.upper(), exc,
+            )
+
+    if (
+        regime_collection.fallback_model is not None
+        and regime_collection.fallback_regimes
+    ):
+        fb_label = "fallback_" + "+".join(regime_collection.fallback_regimes)
+        logger.info("SHAP per regime: explaining fallback model")
+        try:
+            results[fb_label] = shap_explain(regime_collection.fallback_model)
+        except Exception as exc:
+            logger.warning("SHAP fallback failed — %s", exc)
+
+    return results
+
+
+def shap_regime_summary(
+    regime_shap: dict[str, dict[str, Any]],
+    top_n: int = 15,
+) -> pd.DataFrame:
+    """Aggregate mean|SHAP| across regimes into one ranked table.
+
+    Returns a DataFrame with columns ``feature``, ``regime``,
+    ``mean_abs_shap_Winners``, sorted descending.
+    """
+    rows: list[dict[str, Any]] = []
+    for regime, shap_result in regime_shap.items():
+        mas = shap_result.get("mean_abs_shap")
+        if mas is None or mas.empty:
+            continue
+        for feature in mas.index:
+            row: dict[str, Any] = {"feature": feature, "regime": regime}
+            for cn in mas.columns:
+                row[f"mean_abs_shap_{cn}"] = float(mas.loc[feature, cn])
+            rows.append(row)
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+
+    sort_col = (
+        "mean_abs_shap_Winners"
+        if "mean_abs_shap_Winners" in df.columns
+        else df.columns[-1]
+    )
+    return df.sort_values(sort_col, ascending=False).head(top_n * len(regime_shap))
+
+
+def permutation_importance_walk_forward(
+    ohlcv: dict[str, pd.DataFrame],
+    fundamentals: dict[str, dict],
+    oos_years: list[int],
+    *,
+    periods_filter_fn: Any = None,
+    random_seed: int = 42,
+    n_repeats: int = 5,
+) -> pd.DataFrame:
+    """Permutation importance on walk-forward holdout sets.
+
+    For each OOS year, trains a simple RF on the pre-OOS periods, then
+    computes sklearn :func:`~sklearn.inspection.permutation_importance`
+    on the OOS data.  Results are averaged across years.
+
+    Parameters
+    ----------
+    ohlcv
+        Ticker → OHLCV DataFrame.
+    fundamentals
+        Ticker → yfinance ``.info`` dict.
+    oos_years
+        Calendar years to evaluate (e.g. ``[2020, 2021, 2022, 2023, 2024]``).
+    periods_filter_fn
+        ``(oos_year) → list[tuple]`` — function returning training periods
+        for a given OOS year.  Defaults to all periods with q_end < OOS start.
+    random_seed
+        Reproducibility seed.
+    n_repeats
+        Number of permutation repeats per feature.
+
+    Returns
+    -------
+    pd.DataFrame
+        Index = feature name, columns = ``importance_mean``,
+        ``importance_std``, ``n_years``.
+    """
+    from sklearn.inspection import permutation_importance as sklearn_pi
+
+    try:
+        from src.classifier import assign_groups, compute_q1_returns
+        from src.features import build_feature_matrix, drop_correlated_features
+        from config import CLASSIFICATION_PERIODS
+    except ImportError:
+        from classifier import assign_groups, compute_q1_returns
+        from features import build_feature_matrix, drop_correlated_features
+        from config import CLASSIFICATION_PERIODS
+
+    def _default_periods_before(yr: int) -> list[tuple[str, str, str, str]]:
+        cutoff = pd.Timestamp(f"{yr}-01-01")
+        return [
+            p for p in CLASSIFICATION_PERIODS
+            if pd.Timestamp(p[2]) < cutoff
+        ]
+
+    filter_fn = periods_filter_fn or _default_periods_before
+
+    all_importances: dict[str, list[float]] = {}
+    n_evaluated = 0
+
+    for yr in oos_years:
+        train_periods = filter_fn(yr)
+        if len(train_periods) < 4:
+            logger.warning(
+                "Permutation importance: skipping OOS %d (only %d training quarters)",
+                yr, len(train_periods),
+            )
+            continue
+
+        X_parts, y_parts = [], []
+        for fc, q_start, q_end, plabel in train_periods:
+            X = build_feature_matrix(ohlcv, fc, fundamentals)
+            X, _ = drop_correlated_features(X)
+            rets = compute_q1_returns(ohlcv, q_start=q_start, q_end=q_end)
+            labels = assign_groups(rets)
+            common = X.index.intersection(labels.dropna().index)
+            if len(common) < 10:
+                continue
+            xp = X.loc[common].copy()
+            yp = labels.loc[common].copy()
+            uid = pd.Index([f"{t}__{plabel}" for t in xp.index])
+            xp.index = uid
+            yp.index = uid
+            X_parts.append(xp)
+            y_parts.append(yp)
+
+        if not X_parts:
+            continue
+
+        X_train = pd.concat(X_parts)
+        y_train = pd.concat(y_parts)
+
+        oos_cutoff = f"{yr - 1}-12-31"
+        try:
+            from src.backtest import build_oos_features, compute_oos_returns
+        except ImportError:
+            from backtest import build_oos_features, compute_oos_returns
+
+        X_oos = build_oos_features(ohlcv, fundamentals, cutoff_date=oos_cutoff)
+        rets_oos = compute_oos_returns(ohlcv, year=yr)
+        labels_oos = assign_groups(rets_oos)
+        common_oos = X_oos.index.intersection(labels_oos.dropna().index)
+        if len(common_oos) < 10:
+            continue
+
+        X_oos = X_oos.loc[common_oos]
+        y_oos = labels_oos.loc[common_oos]
+
+        shared_cols = [c for c in X_train.columns if c in X_oos.columns]
+        X_train = X_train[shared_cols]
+        X_oos = X_oos[shared_cols]
+
+        medians = X_train.median()
+        X_train = X_train.fillna(medians)
+        X_oos = X_oos.fillna(medians)
+
+        le = LabelEncoder()
+        y_tr_enc = le.fit_transform(y_train.values)
+        y_oos_enc = le.transform(y_oos.values)
+
+        clf = RandomForestClassifier(
+            n_estimators=200,
+            max_depth=10,
+            random_state=random_seed,
+            n_jobs=-1,
+            class_weight="balanced",
+        )
+        clf.fit(X_train.values, y_tr_enc)
+
+        pi = sklearn_pi(
+            clf,
+            X_oos.values,
+            y_oos_enc,
+            n_repeats=n_repeats,
+            random_state=random_seed,
+            scoring="f1_macro",
+            n_jobs=-1,
+        )
+
+        for j, feat in enumerate(shared_cols):
+            all_importances.setdefault(feat, []).append(
+                float(pi.importances_mean[j]),
+            )
+        n_evaluated += 1
+
+        logger.info(
+            "Permutation importance OOS %d: top-3 = %s",
+            yr,
+            sorted(
+                zip(shared_cols, pi.importances_mean),
+                key=lambda x: -x[1],
+            )[:3],
+        )
+
+    if not all_importances:
+        return pd.DataFrame(columns=["importance_mean", "importance_std", "n_years"])
+
+    rows = []
+    for feat, vals in all_importances.items():
+        rows.append({
+            "feature": feat,
+            "importance_mean": float(np.mean(vals)),
+            "importance_std": float(np.std(vals)),
+            "n_years": len(vals),
+        })
+
+    df = pd.DataFrame(rows).set_index("feature").sort_values(
+        "importance_mean", ascending=False,
+    )
+    return df
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,12 @@ Lookahead: features use only data strictly before the classification window.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
 # --- Reproducibility ---
 RANDOM_SEED: int = 42
@@ -116,6 +121,11 @@ LOSER_PERCENTILE: float = 0.25
 # --- Model / validation ---
 TRAIN_TEST_SPLIT: float = 0.75
 CV_FOLDS: int = 5
+
+
+# --- Eulerpool API ---
+EULERPOOL_API_KEY: str = os.environ.get("EULERPOOL_API_KEY", "")
+EULERPOOL_BASE_URL: str = "https://api.eulerpool.com/api/1"
 
 
 def get_period_by_label(label: str) -> tuple[str, str, str, str]:

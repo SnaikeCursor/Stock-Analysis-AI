@@ -5,10 +5,16 @@ including the *cutoff_date*.  No information from the classification window
 (Q1 2024 for training, 2025 for OOS) leaks into features.
 
 Technical features (23): momentum, trend, volatility, volume, liquidity, mean-reversion.
-Fundamental features (10): valuation, growth, quality, size.
+Fundamental features (10): valuation, growth, quality, size, margins, leverage.
 Seasonality (2): cyclic month encoding from the feature cutoff (``month_sin``, ``month_cos``).
 Derived features: interaction terms (momentum × fundamentals), sector-relative
 valuation (P/E vs sector median), and Swiss market regime (SMI momentum as SPI proxy).
+
+Fundamental features support two data sources:
+
+* **yfinance** (``.info`` snapshot) — static, single-date; used as fallback.
+* **Eulerpool** (``fundamentals_quarterly``) — historical quarterly records with
+  ``period`` dates, enabling true point-in-time feature construction per cutoff.
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DERIVED_FEATURE_NAMES",
+    "FEATURE_REGISTRY",
     "FUNDAMENTAL_FEATURE_NAMES",
     "INTERACTION_FEATURE_NAMES",
     "MACRO_BENCHMARK_TICKER",
@@ -43,12 +50,15 @@ __all__ = [
     "build_derived_features",
     "build_feature_matrix",
     "build_fundamental_features",
+    "build_fundamental_features_pit",
     "build_multi_period_feature_matrix",
     "build_rank_features",
     "build_sector_dummies",
     "build_technical_features",
     "compute_macro_momentum",
     "drop_correlated_features",
+    "drop_correlated_features_train_test",
+    "get_feature_registry_df",
 ]
 
 _MIN_BARS: int = 63
@@ -87,19 +97,16 @@ TECHNICAL_FEATURE_NAMES: list[str] = [
 
 FUNDAMENTAL_FEATURE_NAMES: list[str] = [
     "pe_ratio",
-    "pb_ratio",
     "ev_ebitda",
     "dividend_yield",
     "revenue_growth",
     "earnings_growth",
-    "roe",
     "profit_margin",
-    "debt_equity",
     "market_cap_log",
-    # Analyst consensus (yfinance .info)
-    "analyst_rating",
-    "analyst_count",
-    "analyst_target_upside",
+    # PIT-sourced margins & leverage (Eulerpool); NaN when yfinance fallback
+    "ebit_margin",
+    "gross_margin",
+    "net_debt_by_ebit",
 ]
 
 SEASONALITY_FEATURE_NAMES: list[str] = [
@@ -111,7 +118,7 @@ SEASONALITY_FEATURE_NAMES: list[str] = [
 MACRO_BENCHMARK_TICKER: str = "^SSMI"
 
 INTERACTION_FEATURE_NAMES: list[str] = [
-    "mom_3m_x_roe",
+    "mom_3m_x_ebit_margin",
     "inv_pe_x_mom_6m",
 ]
 
@@ -128,19 +135,239 @@ DERIVED_FEATURE_NAMES: list[str] = (
     INTERACTION_FEATURE_NAMES + SECTOR_RELATIVE_FEATURE_NAMES + MACRO_FEATURE_NAMES
 )
 
+# ---------------------------------------------------------------------------
+# Feature registry — category, lookback, human-readable description per feature
+# ---------------------------------------------------------------------------
+
+FEATURE_REGISTRY: dict[str, dict[str, str]] = {
+    # ── Momentum ──
+    "mom_1m": {
+        "category": "momentum",
+        "lookback": "21d",
+        "description": "1-month price momentum (simple return over 21 trading days)",
+    },
+    "mom_3m": {
+        "category": "momentum",
+        "lookback": "63d",
+        "description": "3-month price momentum (simple return over 63 trading days)",
+    },
+    "mom_6m": {
+        "category": "momentum",
+        "lookback": "126d",
+        "description": "6-month price momentum (simple return over 126 trading days)",
+    },
+    "rsi_14": {
+        "category": "momentum",
+        "lookback": "14d",
+        "description": "Relative Strength Index (14-day window)",
+    },
+    "roc_10": {
+        "category": "momentum",
+        "lookback": "10d",
+        "description": "Rate of Change (10-day window)",
+    },
+    # ── Trend ──
+    "sma_ratio_50_200": {
+        "category": "trend",
+        "lookback": "200d",
+        "description": "SMA(50) / SMA(200) — golden/death cross proximity",
+    },
+    "macd_diff_norm": {
+        "category": "trend",
+        "lookback": "26d",
+        "description": "MACD histogram normalised by close price",
+    },
+    "adx_14": {
+        "category": "trend",
+        "lookback": "14d",
+        "description": "Average Directional Index (14-day) — trend strength",
+    },
+    # ── Volatility ──
+    "hvol_20d": {
+        "category": "volatility",
+        "lookback": "20d",
+        "description": "20-day historical volatility (annualised std of log returns)",
+    },
+    "hvol_60d": {
+        "category": "volatility",
+        "lookback": "60d",
+        "description": "60-day historical volatility (annualised std of log returns)",
+    },
+    "atr_14_pct": {
+        "category": "volatility",
+        "lookback": "14d",
+        "description": "Average True Range (14-day) as percentage of close",
+    },
+    "bb_width": {
+        "category": "volatility",
+        "lookback": "20d",
+        "description": "Bollinger Band width (upper − lower) / middle",
+    },
+    # ── Volume ──
+    "obv_slope_20d": {
+        "category": "volume",
+        "lookback": "20d",
+        "description": "OBV slope (linear regression of On-Balance Volume over 20 days)",
+    },
+    "volume_ratio_20_60": {
+        "category": "volume",
+        "lookback": "60d",
+        "description": "Mean volume (20d) / mean volume (60d) — short-term volume momentum",
+    },
+    "rel_volume_5d": {
+        "category": "volume",
+        "lookback": "60d",
+        "description": "Mean volume (5d) / mean volume (60d) — very-short-term activity spike",
+    },
+    # ── Liquidity ──
+    "amihud_illiq": {
+        "category": "liquidity",
+        "lookback": "20d",
+        "description": "Amihud illiquidity ratio (mean |return| / volume over 20 days)",
+    },
+    "volume_trend_60d": {
+        "category": "liquidity",
+        "lookback": "60d",
+        "description": "Volume trend (linear regression slope of log-volume over 60 days)",
+    },
+    "spread_proxy": {
+        "category": "liquidity",
+        "lookback": "20d",
+        "description": "Bid-ask spread proxy: mean (High−Low)/Close over 20 days",
+    },
+    # ── Mean reversion ──
+    "dist_52w_high": {
+        "category": "mean_reversion",
+        "lookback": "252d",
+        "description": "Distance from 52-week high (current close / 252d max − 1)",
+    },
+    "dist_52w_low": {
+        "category": "mean_reversion",
+        "lookback": "252d",
+        "description": "Distance from 52-week low (current close / 252d min − 1)",
+    },
+    "zscore_20d": {
+        "category": "mean_reversion",
+        "lookback": "20d",
+        "description": "Z-score of close price vs. 20-day SMA and std",
+    },
+    "return_skew_60d": {
+        "category": "mean_reversion",
+        "lookback": "60d",
+        "description": "Skewness of daily returns over 60 days",
+    },
+    "max_drawdown_60d": {
+        "category": "mean_reversion",
+        "lookback": "60d",
+        "description": "Maximum drawdown over the last 60 trading days",
+    },
+    # ── Fundamentals (PIT via Eulerpool; yfinance fallback) ──
+    "pe_ratio": {
+        "category": "fundamental_valuation",
+        "lookback": "point-in-time",
+        "description": "Trailing P/E ratio (price / TTM EPS from Eulerpool quarterly)",
+    },
+    "ev_ebitda": {
+        "category": "fundamental_valuation",
+        "lookback": "point-in-time",
+        "description": "EV / EBIT (EBIT proxy for EBITDA; Eulerpool quarterly)",
+    },
+    "dividend_yield": {
+        "category": "fundamental_valuation",
+        "lookback": "point-in-time",
+        "description": "Trailing dividend yield (TTM dividend / price)",
+    },
+    "revenue_growth": {
+        "category": "fundamental_growth",
+        "lookback": "point-in-time",
+        "description": "Year-over-year revenue growth (quarterly vs 4Q prior)",
+    },
+    "earnings_growth": {
+        "category": "fundamental_growth",
+        "lookback": "point-in-time",
+        "description": "Year-over-year earnings growth (quarterly vs 4Q prior)",
+    },
+    "profit_margin": {
+        "category": "fundamental_quality",
+        "lookback": "point-in-time",
+        "description": "Net profit margin (earnings_margin from Eulerpool quarterly)",
+    },
+    "market_cap_log": {
+        "category": "fundamental_size",
+        "lookback": "point-in-time",
+        "description": "Log of market cap (price × shares at cutoff)",
+    },
+    "ebit_margin": {
+        "category": "fundamental_quality",
+        "lookback": "point-in-time",
+        "description": "EBIT margin (Eulerpool quarterly)",
+    },
+    "gross_margin": {
+        "category": "fundamental_quality",
+        "lookback": "point-in-time",
+        "description": "Gross margin (Eulerpool quarterly; yfinance grossMargins fallback)",
+    },
+    "net_debt_by_ebit": {
+        "category": "fundamental_leverage",
+        "lookback": "point-in-time",
+        "description": "Net debt / EBIT leverage ratio (replaces debt_equity)",
+    },
+    # ── Seasonality ──
+    "month_sin": {
+        "category": "seasonality",
+        "lookback": "0d",
+        "description": "Cyclic month encoding: sin(2π × month / 12)",
+    },
+    "month_cos": {
+        "category": "seasonality",
+        "lookback": "0d",
+        "description": "Cyclic month encoding: cos(2π × month / 12)",
+    },
+    # ── Interaction / derived ──
+    "mom_3m_x_ebit_margin": {
+        "category": "interaction",
+        "lookback": "63d + PIT",
+        "description": "Interaction: 3-month momentum × EBIT margin (quality-momentum blend)",
+    },
+    "inv_pe_x_mom_6m": {
+        "category": "interaction",
+        "lookback": "126d + PIT",
+        "description": "Interaction: inverse P/E × 6-month momentum (value-momentum blend)",
+    },
+    "pe_vs_sector_median": {
+        "category": "sector_relative",
+        "lookback": "point-in-time",
+        "description": "P/E ratio relative to sector median (sector-normalised valuation)",
+    },
+    # ── Macro ──
+    "spi_mom_3m": {
+        "category": "macro",
+        "lookback": "63d",
+        "description": "Swiss Market Index (^SSMI) 3-month momentum (SPI proxy)",
+    },
+    "spi_mom_6m": {
+        "category": "macro",
+        "lookback": "126d",
+        "description": "Swiss Market Index (^SSMI) 6-month momentum (SPI proxy)",
+    },
+}
+
+
+def get_feature_registry_df() -> pd.DataFrame:
+    """Return the feature registry as a DataFrame for display and export."""
+    rows = []
+    for name, info in FEATURE_REGISTRY.items():
+        rows.append({"feature": name, **info})
+    return pd.DataFrame(rows).set_index("feature")
+
 _YF_FUNDAMENTAL_MAP: dict[str, str] = {
     "trailingPE": "pe_ratio",
-    "priceToBook": "pb_ratio",
     "enterpriseToEbitda": "ev_ebitda",
     "dividendYield": "dividend_yield",
     "revenueGrowth": "revenue_growth",
     "earningsGrowth": "earnings_growth",
-    "returnOnEquity": "roe",
     "profitMargins": "profit_margin",
-    "debtToEquity": "debt_equity",
-    "recommendationMean": "analyst_rating",
-    "numberOfAnalystOpinions": "analyst_count",
-    "targetMeanPrice": "analyst_target_upside",
+    "grossMargins": "gross_margin",
 }
 
 
@@ -348,12 +575,14 @@ def _compute_technicals(df: pd.DataFrame) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 def _extract_fundamentals(info: dict[str, Any]) -> dict[str, float]:
-    """Extract fundamental features from a yfinance ``.info`` dict."""
+    """Extract fundamental features from a yfinance ``.info`` dict.
+
+    This is the **fallback** path used when Eulerpool PIT data is unavailable.
+    Features that require Eulerpool-only fields (``ebit_margin``,
+    ``net_debt_by_ebit``) are set to ``NaN``.
+    """
     feats: dict[str, float] = {}
     for yf_key, feat_name in _YF_FUNDAMENTAL_MAP.items():
-        if feat_name == "analyst_target_upside":
-            # Derived from targetMeanPrice and current/regular price (see below)
-            continue
         raw = info.get(yf_key)
         if raw is None or (isinstance(raw, float) and not np.isfinite(raw)):
             feats[feat_name] = float("nan")
@@ -373,24 +602,8 @@ def _extract_fundamentals(info: dict[str, Any]) -> dict[str, float]:
     else:
         feats["market_cap_log"] = float("nan")
 
-    # Target upside vs current price (not a single yfinance field)
-    target_raw = info.get("targetMeanPrice")
-    price_raw = info.get("currentPrice")
-    if price_raw is None:
-        price_raw = info.get("regularMarketPrice")
-    if target_raw is None or price_raw is None:
-        feats["analyst_target_upside"] = float("nan")
-    elif isinstance(target_raw, float) and not np.isfinite(target_raw):
-        feats["analyst_target_upside"] = float("nan")
-    elif isinstance(price_raw, float) and not np.isfinite(price_raw):
-        feats["analyst_target_upside"] = float("nan")
-    else:
-        try:
-            tgt = float(target_raw)
-            px = float(price_raw)
-            feats["analyst_target_upside"] = (tgt / px) - 1.0 if px > 0 else float("nan")
-        except (ValueError, TypeError):
-            feats["analyst_target_upside"] = float("nan")
+    feats["ebit_margin"] = float("nan")
+    feats["net_debt_by_ebit"] = float("nan")
 
     return feats
 
@@ -471,6 +684,70 @@ def build_fundamental_features(
     return result[FUNDAMENTAL_FEATURE_NAMES]
 
 
+def build_fundamental_features_pit(
+    eulerpool_quarterly: dict[str, list[dict]],
+    eulerpool_profiles: dict[str, dict],
+    cutoff_date: str,
+    ohlcv_by_ticker: dict[str, pd.DataFrame],
+    publication_lag_days: int = 0,
+) -> pd.DataFrame:
+    """Point-in-time fundamental features from Eulerpool quarterly data.
+
+    For each ticker, retrieves the close price at *cutoff_date* from OHLCV and
+    calls :func:`~src.eulerpool_fundamentals.extract_pit_features` to produce
+    features anchored to the latest quarterly filing before the cutoff.
+
+    Parameters
+    ----------
+    eulerpool_quarterly
+        Ticker -> list of quarterly records (sorted by ``period`` ascending).
+    eulerpool_profiles
+        Ticker -> profile dict (used for sector info elsewhere, passed through
+        for interface consistency).
+    cutoff_date
+        Features are derived from the latest quarter with ``period <= cutoff_date``
+        (after subtracting *publication_lag_days* when that is positive).
+    ohlcv_by_ticker
+        Ticker -> OHLCV DataFrame; used to get the close price at *cutoff_date*.
+    publication_lag_days
+        Days to shift the fundamental cutoff earlier (reporting delay).  Price
+        still uses *cutoff_date*.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per ticker, columns :data:`FUNDAMENTAL_FEATURE_NAMES`.
+    """
+    from src.eulerpool_fundamentals import extract_pit_features, get_price_at_cutoff
+
+    nan_row = {name: float("nan") for name in FUNDAMENTAL_FEATURE_NAMES}
+    rows: dict[str, dict[str, float]] = {}
+
+    for ticker in eulerpool_quarterly:
+        qr = eulerpool_quarterly.get(ticker, [])
+        ohlcv = ohlcv_by_ticker.get(ticker)
+
+        if not qr or ohlcv is None or ohlcv.empty:
+            rows[ticker] = nan_row.copy()
+            continue
+
+        try:
+            price = get_price_at_cutoff(ohlcv, cutoff_date)
+            rows[ticker] = extract_pit_features(
+                qr, cutoff_date, price, publication_lag_days=publication_lag_days
+            )
+        except Exception:
+            logger.warning(
+                "PIT fundamental extraction failed for %s at %s",
+                ticker, cutoff_date, exc_info=True,
+            )
+            rows[ticker] = nan_row.copy()
+
+    result = pd.DataFrame.from_dict(rows, orient="index")
+    result.index.name = "ticker"
+    return result[FUNDAMENTAL_FEATURE_NAMES]
+
+
 def compute_macro_momentum(
     ohlcv: pd.DataFrame,
     cutoff_date: str,
@@ -513,24 +790,28 @@ def build_derived_features(
     *,
     cutoff_date: str,
     macro_ohlcv: pd.DataFrame | None = None,
+    eulerpool_profiles: dict[str, dict] | None = None,
 ) -> pd.DataFrame:
     """Interaction, sector-relative valuation, and macro regime columns.
 
     Expects *feature_matrix* to contain the columns needed for interactions
-    (``mom_3m``, ``roe``, ``pe_ratio``, ``mom_6m``) when fundamentals were merged.
+    (``mom_3m``, ``ebit_margin``, ``pe_ratio``, ``mom_6m``) when fundamentals
+    were merged.
 
     Parameters
     ----------
     feature_matrix
         Technical (+ optional fundamental) rows, index = ticker.
     fundamentals_by_ticker
-        Same mapping as :func:`build_fundamental_features`; required for sector-relative
-        P/E.  If None, sector column is all NaN.
+        Ticker -> yfinance ``.info`` dict; used for sector-relative P/E when
+        *eulerpool_profiles* is not provided.
     cutoff_date
         Passed to :func:`compute_macro_momentum` for the macro series.
     macro_ohlcv
-        Optional OHLCV for the benchmark index.  If omitted, macro columns are NaN
-        unless pre-computed values are injected by the caller.
+        Optional OHLCV for the benchmark index.  If omitted, macro columns are NaN.
+    eulerpool_profiles
+        Ticker -> Eulerpool profile dict.  When provided, takes precedence over
+        *fundamentals_by_ticker* for sector lookup.
 
     Returns
     -------
@@ -545,11 +826,11 @@ def build_derived_features(
         dtype=float,
     )
 
-    # ── Interactions (plan: mom_3m * roe; (1/pe) * mom_6m) ─────────────────
-    if all(c in feature_matrix.columns for c in ("mom_3m", "roe")):
+    # ── Interactions: mom_3m × ebit_margin; (1/pe) × mom_6m ────────────────
+    if all(c in feature_matrix.columns for c in ("mom_3m", "ebit_margin")):
         m3 = feature_matrix["mom_3m"].astype(float)
-        roe = feature_matrix["roe"].astype(float)
-        derived["mom_3m_x_roe"] = m3 * roe
+        em = feature_matrix["ebit_margin"].astype(float)
+        derived["mom_3m_x_ebit_margin"] = m3 * em
     if all(c in feature_matrix.columns for c in ("pe_ratio", "mom_6m")):
         pe = feature_matrix["pe_ratio"].astype(float)
         m6 = feature_matrix["mom_6m"].astype(float)
@@ -557,12 +838,13 @@ def build_derived_features(
         derived["inv_pe_x_mom_6m"] = (inv_pe * m6).astype(float)
 
     # ── Sector-relative P/E ───────────────────────────────────────────────
-    if fundamentals_by_ticker is not None and "pe_ratio" in feature_matrix.columns:
+    sector_source = eulerpool_profiles or fundamentals_by_ticker
+    if sector_source is not None and "pe_ratio" in feature_matrix.columns:
         pe_s = feature_matrix["pe_ratio"].astype(float)
         med_by_ticker = pd.Series(np.nan, index=idx, dtype=float)
         sectors: list[str | None] = []
         for t in idx:
-            info = fundamentals_by_ticker.get(t) or {}
+            info = sector_source.get(t) or {}
             raw = info.get("sector") if info else None
             if raw and isinstance(raw, str) and raw.strip():
                 sectors.append(raw.strip())
@@ -684,6 +966,9 @@ def build_feature_matrix(
     fundamentals_by_ticker: dict[str, dict[str, Any]] | None = None,
     *,
     macro_ohlcv: pd.DataFrame | None = None,
+    eulerpool_quarterly: dict[str, list[dict]] | None = None,
+    eulerpool_profiles: dict[str, dict] | None = None,
+    publication_lag_days: int = 0,
 ) -> pd.DataFrame:
     """Full feature matrix: technicals (+ optionally fundamentals), one row per ticker.
 
@@ -696,11 +981,21 @@ def build_feature_matrix(
     cutoff_date
         Features use only data on or before this date (lookahead prevention).
     fundamentals_by_ticker
-        Optional ticker -> yfinance ``.info`` dict.  When provided, fundamental
-        columns are appended to the technical features.
+        Optional ticker -> yfinance ``.info`` dict.  Used as **fallback** when
+        *eulerpool_quarterly* is not provided.
     macro_ohlcv
         Optional OHLCV for the Swiss benchmark index.  Overrides lookup of
         ``ohlcv_by_ticker[MACRO_BENCHMARK_TICKER]``.
+    eulerpool_quarterly
+        Optional ticker -> list of Eulerpool quarterly records (sorted by
+        ``period``).  When provided, fundamentals are computed point-in-time
+        via :func:`build_fundamental_features_pit`.
+    eulerpool_profiles
+        Optional ticker -> Eulerpool company profile dict.  Used for sector
+        lookup in derived features when Eulerpool data is active.
+    publication_lag_days
+        Passed to :func:`build_fundamental_features_pit` when Eulerpool
+        quarterly data is used.
 
     Returns
     -------
@@ -715,7 +1010,16 @@ def build_feature_matrix(
     }
     tech = build_technical_features(stock_ohlcv, cutoff_date=cutoff_date)
 
-    if fundamentals_by_ticker is not None:
+    if eulerpool_quarterly is not None:
+        fund = build_fundamental_features_pit(
+            eulerpool_quarterly,
+            eulerpool_profiles or {},
+            cutoff_date,
+            stock_ohlcv,
+            publication_lag_days=publication_lag_days,
+        )
+        tech = tech.join(fund, how="left")
+    elif fundamentals_by_ticker is not None:
         fund = build_fundamental_features(fundamentals_by_ticker)
         tech = tech.join(fund, how="left")
 
@@ -732,6 +1036,7 @@ def build_feature_matrix(
         fundamentals_by_ticker,
         cutoff_date=cutoff_date,
         macro_ohlcv=macro_df,
+        eulerpool_profiles=eulerpool_profiles,
     )
     tech = pd.concat([tech, derived], axis=1)
 
@@ -918,3 +1223,19 @@ def drop_correlated_features(
         )
 
     return reduced, to_drop
+
+
+def drop_correlated_features_train_test(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    threshold: float = 0.85,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Drop correlated columns using *X_train* only; apply the same drops to *X_test*.
+
+    Pearson correlations and the drop decision are computed on the training
+    matrix only, avoiding holdout leakage from a full-panel correlation matrix.
+    """
+    reduced_train, dropped = drop_correlated_features(X_train, threshold=threshold)
+    cols = list(reduced_train.columns)
+    X_test_out = X_test.reindex(columns=cols)
+    return reduced_train, X_test_out, dropped
