@@ -676,6 +676,8 @@ class ModelService:
 
         ohlcv = self._data.ohlcv
         fundamentals = self._data.fundamentals
+        eulerpool_q = self._data.eulerpool_quarterly
+        eulerpool_p = self._data.eulerpool_profiles
 
         start_ts = pd.Timestamp(start_date)
         first_year = max(start_ts.year, 2015)
@@ -704,6 +706,8 @@ class ModelService:
                 ohlcv,
                 fundamentals,
                 cutoff_date=p.cutoff,
+                eulerpool_quarterly=eulerpool_q if eulerpool_q else None,
+                eulerpool_profiles=eulerpool_p if eulerpool_p else None,
                 publication_lag_days=_PUBLICATION_LAG_DAYS,
             )
             cutoff_preds[p.cutoff] = predict_returns(wf_models[yr], X_oos)
