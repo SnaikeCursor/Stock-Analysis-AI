@@ -5,8 +5,6 @@ import { Layout } from '@/components/Layout'
 import { AlertsPage } from '@/pages/Alerts'
 import { DashboardPage } from '@/pages/Dashboard'
 import { HistoryPage } from '@/pages/History'
-import { PortfolioPage } from '@/pages/Portfolio'
-import { SignalsPage } from '@/pages/Signals'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,9 +23,7 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<DashboardPage />} />
-            <Route path="signals" element={<SignalsPage />} />
             <Route path="history" element={<HistoryPage />} />
-            <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="alerts" element={<AlertsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

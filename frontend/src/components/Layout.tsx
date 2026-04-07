@@ -1,15 +1,13 @@
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Activity, Bell, History, LayoutDashboard, Radio, RefreshCw, Wallet } from 'lucide-react'
+import { Activity, Bell, History, LayoutDashboard, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/signals', label: 'Signals', icon: Radio, end: false },
   { to: '/history', label: 'History', icon: History, end: false },
-  { to: '/portfolio', label: 'Portfolio', icon: Wallet, end: false },
   { to: '/alerts', label: 'Alerts', icon: Bell, end: false },
 ] as const
 
