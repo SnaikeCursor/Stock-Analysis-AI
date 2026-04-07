@@ -50,21 +50,24 @@ _DEFAULT_MAX_WEIGHT = 0.30
 _DEFAULT_HYSTERESIS_BUFFER = 2
 _SEMI_ANNUAL_REBALANCE_FREQ = 2
 _PUBLICATION_LAG_DAYS = 60
-_MODEL_SUFFIX = "_cs_lag60"
+_MODEL_SUFFIXES = ("_cs_pit_lag60", "_cs_lag60")
 
 BACKTEST_CACHE_PATH = config.DATA_DIR / "cache" / "backtest_results.json"
+WF_EVALUATION_PATH = config.DATA_DIR / "cache" / "wf_evaluation_results.json"
 
 
 def _backtest_cache_key_to_json(key: tuple[Any, ...]) -> str:
-    """Serialise ``(oos_years_tuple, costs_bps, top_n, rebalance_freq)`` for JSON object keys."""
-    years, costs_bps, top_n, rebalance_freq = key
-    return json.dumps([list(years), costs_bps, top_n, rebalance_freq])
+    """Serialise ``(oos_years_tuple, costs_bps, top_n, rebalance_freq, pub_lag)`` for JSON object keys."""
+    years, costs_bps, top_n, rebalance_freq, pub_lag = key
+    return json.dumps([list(years), costs_bps, top_n, rebalance_freq, pub_lag])
 
 
 def _backtest_cache_key_from_json(key_str: str) -> tuple[Any, ...]:
     """Restore cache key from :func:`_backtest_cache_key_to_json`."""
     raw = json.loads(key_str)
-    return (tuple(raw[0]), float(raw[1]), int(raw[2]), int(raw[3]))
+    if len(raw) == 4:
+        return (tuple(raw[0]), float(raw[1]), int(raw[2]), int(raw[3]), 0)
+    return (tuple(raw[0]), float(raw[1]), int(raw[2]), int(raw[3]), int(raw[4]))
 
 
 def _normalize_backtest_dict_from_disk(val: dict[str, Any]) -> dict[str, Any]:
@@ -109,13 +112,15 @@ def _json_safe_for_disk(obj: Any) -> Any:
 
 def _regression_cache_path(oos_year: int) -> Path:
     """Cache path for walk-forward regression model (Lag60-SA)."""
-    return config.DATA_DIR / "cache" / f"regression_wf_{oos_year}{_MODEL_SUFFIX}.joblib"
+    return config.DATA_DIR / "cache" / f"regression_wf_{oos_year}{_MODEL_SUFFIXES[0]}.joblib"
 
 
 def _find_latest_regression_model() -> tuple[Path, int]:
-    """Find the most recent ``regression_wf_{year}_cs_lag60.joblib`` cache file.
+    """Find the most recent ``regression_wf_{year}_cs_pit_lag60.joblib`` cache file.
 
-    Returns ``(path, oos_year)`` for the newest available model.
+    Searches for all known suffixes (``_cs_pit_lag60``, ``_cs_lag60``)
+    and prioritises the PIT variant.  Returns ``(path, oos_year)`` for
+    the newest available model.
     """
     cache_dir = config.DATA_DIR / "cache"
     if not cache_dir.exists():
@@ -124,18 +129,19 @@ def _find_latest_regression_model() -> tuple[Path, int]:
             "Run `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` to train."
         )
 
-    candidates: list[tuple[Path, int]] = []
-    for f in cache_dir.glob(f"regression_wf_*{_MODEL_SUFFIX}.joblib"):
-        stem = f.stem
-        prefix = "regression_wf_"
-        if not stem.startswith(prefix) or not stem.endswith(_MODEL_SUFFIX):
-            continue
-        year_str = stem[len(prefix):-len(_MODEL_SUFFIX)]
-        try:
-            year = int(year_str)
-            candidates.append((f, year))
-        except ValueError:
-            continue
+    candidates: list[tuple[Path, int, int]] = []
+    for suffix_priority, suffix in enumerate(_MODEL_SUFFIXES):
+        for f in cache_dir.glob(f"regression_wf_*{suffix}.joblib"):
+            stem = f.stem
+            prefix = "regression_wf_"
+            if not stem.startswith(prefix) or not stem.endswith(suffix):
+                continue
+            year_str = stem[len(prefix):-len(suffix)]
+            try:
+                year = int(year_str)
+                candidates.append((f, year, suffix_priority))
+            except ValueError:
+                continue
 
     if not candidates:
         raise FileNotFoundError(
@@ -143,8 +149,8 @@ def _find_latest_regression_model() -> tuple[Path, int]:
             "Run `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` to train."
         )
 
-    candidates.sort(key=lambda x: x[1], reverse=True)
-    return candidates[0]
+    candidates.sort(key=lambda x: (-x[1], x[2]))
+    return candidates[0][0], candidates[0][1]
 
 
 # ------------------------------------------------------------------
@@ -240,10 +246,31 @@ class ModelService:
     # Model lifecycle
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _deserialize_regression_result(bundle: Any) -> RegressionTrainResult:
+        """Unpack a joblib-loaded bundle into a :class:`RegressionTrainResult`."""
+        if isinstance(bundle, RegressionTrainResult):
+            return bundle
+        if isinstance(bundle, dict) and "regression_result" in bundle:
+            inner = bundle["regression_result"]
+            if isinstance(inner, RegressionTrainResult):
+                return inner
+            if isinstance(inner, dict):
+                return RegressionTrainResult(**inner)
+            raise TypeError(
+                f"Expected RegressionTrainResult inside 'regression_result', got {type(inner).__name__}"
+            )
+        if isinstance(bundle, dict) and "model" in bundle:
+            return RegressionTrainResult(**bundle)
+        raise TypeError(
+            f"Expected RegressionTrainResult, got {type(bundle).__name__}"
+        )
+
     def load_model(self) -> RegressionTrainResult:
         """Load the ``RegressionTrainResult`` from the joblib cache.
 
-        Finds the most recent ``regression_wf_{year}_cs_lag60.joblib`` file.
+        Finds the most recent ``regression_wf_{year}_cs_pit_lag60.joblib``
+        file (falls back to ``_cs_lag60`` if no PIT variant exists).
         Raises ``FileNotFoundError`` if no cache exists — run
         ``robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache`` first.
         """
@@ -253,16 +280,7 @@ class ModelService:
         import joblib
 
         path, year = _find_latest_regression_model()
-        bundle = joblib.load(path)
-
-        if isinstance(bundle, RegressionTrainResult):
-            result = bundle
-        elif isinstance(bundle, dict) and "model" in bundle:
-            result = RegressionTrainResult(**bundle)
-        else:
-            raise TypeError(
-                f"Expected RegressionTrainResult, got {type(bundle).__name__}"
-            )
+        result = self._deserialize_regression_result(joblib.load(path))
 
         self._regression_result = result
         self._model_year = year
@@ -271,6 +289,50 @@ class ModelService:
             year, path, len(result.feature_names),
         )
         return result
+
+    def _load_walk_forward_models(
+        self, oos_years: list[int],
+    ) -> dict[int, RegressionTrainResult]:
+        """Load per-year walk-forward regression models for backtesting.
+
+        Each OOS year gets the model that was trained only on data prior
+        to that year, preventing look-ahead bias.  Falls back to the
+        latest available model for years without a dedicated cache file.
+        """
+        import joblib
+
+        cache_dir = config.DATA_DIR / "cache"
+        if not cache_dir.exists():
+            raise FileNotFoundError(
+                f"Cache directory not found at {cache_dir}. "
+                "Run `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` to train."
+            )
+
+        models: dict[int, RegressionTrainResult] = {}
+        for yr in oos_years:
+            loaded = False
+            for suffix in _MODEL_SUFFIXES:
+                path = cache_dir / f"regression_wf_{yr}{suffix}.joblib"
+                if path.exists():
+                    result = self._deserialize_regression_result(joblib.load(path))
+                    models[yr] = result
+                    loaded = True
+                    logger.debug(
+                        "Walk-forward model for OOS %d loaded from %s", yr, path,
+                    )
+                    break
+            if not loaded:
+                logger.warning(
+                    "No walk-forward model for OOS year %d — falling back to latest model",
+                    yr,
+                )
+                models[yr] = self.load_model()
+
+        logger.info(
+            "Loaded %d walk-forward models for years %s",
+            len(models), sorted(models),
+        )
+        return models
 
     # ------------------------------------------------------------------
     # Signal generation
@@ -409,6 +471,57 @@ class ModelService:
     # Historical backtest
     # ------------------------------------------------------------------
 
+    def _load_wf_evaluation_results(
+        self, rebalance_freq: int,
+    ) -> dict[str, Any] | None:
+        """Read pre-computed walk-forward evaluation results saved by ``robustness_test.py``.
+
+        Returns the serialised result for the requested *rebalance_freq*
+        or ``None`` if the file is missing / doesn't match.
+        """
+        if not WF_EVALUATION_PATH.exists():
+            return None
+        try:
+            with open(WF_EVALUATION_PATH, encoding="utf-8") as f:
+                payload = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not read %s: %s", WF_EVALUATION_PATH, exc)
+            return None
+
+        meta = payload.get("meta", {})
+        if meta.get("publication_lag_days") != _PUBLICATION_LAG_DAYS:
+            logger.info(
+                "WF evaluation lag mismatch: file=%s, expected=%d",
+                meta.get("publication_lag_days"), _PUBLICATION_LAG_DAYS,
+            )
+            return None
+
+        freq_map = {"quarterly": 1, "semi_annual": 2, "annual": 4}
+        freq_label = next(
+            (lbl for lbl, val in freq_map.items() if val == rebalance_freq),
+            None,
+        )
+        if freq_label is None:
+            return None
+
+        freq_data = payload.get("frequencies", {}).get(freq_label)
+        if not freq_data or not freq_data.get("per_year"):
+            return None
+
+        per_year = {}
+        for k, v in freq_data["per_year"].items():
+            try:
+                per_year[int(k)] = v
+            except (TypeError, ValueError):
+                continue
+        freq_data["per_year"] = per_year
+
+        logger.info(
+            "Loaded pre-computed WF evaluation (%s, lag=%d) from %s — %d years",
+            freq_label, _PUBLICATION_LAG_DAYS, WF_EVALUATION_PATH, len(per_year),
+        )
+        return freq_data
+
     def run_historical_backtest(
         self,
         oos_years: list[int] | None = None,
@@ -417,11 +530,13 @@ class ModelService:
         top_n: int = _DEFAULT_TOP_N,
         rebalance_freq: int = _SEMI_ANNUAL_REBALANCE_FREQ,
     ) -> dict[str, Any]:
-        """Run walk-forward regression backtest and return serialisable metrics.
+        """Return walk-forward backtest metrics.
 
-        Wraps :func:`evaluate_forward_quarterly_regression` from
-        ``src/backtest.py`` with semi-annual rebalancing and 60-day
-        publication lag (default).
+        Reads pre-computed results saved by ``robustness_test.py``
+        (``data/cache/wf_evaluation_results.json``) to guarantee
+        consistency with the training data.  Falls back to live
+        recomputation with per-year walk-forward models if the
+        pre-computed file is absent.
 
         Parameters
         ----------
@@ -434,52 +549,84 @@ class ModelService:
         rebalance_freq
             Quarters between rebalances (2 = semi-annual, 1 = quarterly).
         """
-        result = self.load_model()
-        ohlcv = self._data.ohlcv
-        fundamentals = self._data.fundamentals
-
         if oos_years is None:
             oos_years = list(range(2015, 2026))
 
-        cache_key = (tuple(oos_years), costs_bps, top_n, rebalance_freq)
+        cache_key = (
+            tuple(oos_years), costs_bps, top_n,
+            rebalance_freq, _PUBLICATION_LAG_DAYS,
+        )
         if cache_key in self._backtest_cache:
-            logger.info("Returning cached backtest for %s", cache_key)
+            logger.info("Returning RAM-cached backtest for %s", cache_key)
             return self._backtest_cache[cache_key]
 
-        qfr = evaluate_forward_quarterly_regression(
-            ohlcv,
-            fundamentals,
-            regression_result=result,
-            oos_years=oos_years,
-            costs_bps=costs_bps,
-            top_n=top_n,
-            rebalance_freq=rebalance_freq,
-            publication_lag_days=_PUBLICATION_LAG_DAYS,
-        )
-
-        per_year_summary: dict[int, dict[str, Any]] = {}
-        for year, ftr in qfr.per_year.items():
-            per_year_summary[year] = {
-                "long_only": ftr.long_only,
-                "benchmark": ftr.benchmark,
-                "costs_bps": ftr.costs_bps,
+        precomputed = self._load_wf_evaluation_results(rebalance_freq)
+        if precomputed is not None:
+            per_year_filtered = {
+                yr: precomputed["per_year"][yr]
+                for yr in oos_years
+                if yr in precomputed["per_year"]
             }
+            if len(per_year_filtered) == len(oos_years):
+                serialised = {
+                    "per_year": per_year_filtered,
+                    "quarterly_detail": precomputed.get("quarterly_detail", []),
+                    "total_costs_bps": precomputed.get("total_costs_bps", 0.0),
+                    "rebalance_freq": rebalance_freq,
+                }
+                self._backtest_cache[cache_key] = serialised
+                return serialised
+            logger.warning(
+                "Pre-computed WF results cover %d/%d requested years — falling back to live recomputation",
+                len(per_year_filtered), len(oos_years),
+            )
 
-        quarterly_detail = (
-            qfr.quarterly_detail.to_dict(orient="records")
-            if qfr.quarterly_detail is not None and not qfr.quarterly_detail.empty
-            else []
-        )
+        logger.info("No pre-computed WF results — running live walk-forward backtest")
+        ohlcv = self._data.ohlcv
+        fundamentals = self._data.fundamentals
+
+        wf_models = self._load_walk_forward_models(oos_years)
+
+        per_year_results: list[Any] = []
+        for yr in oos_years:
+            qfr = evaluate_forward_quarterly_regression(
+                ohlcv,
+                fundamentals,
+                regression_result=wf_models[yr],
+                oos_years=[yr],
+                costs_bps=costs_bps,
+                top_n=top_n,
+                rebalance_freq=rebalance_freq,
+                publication_lag_days=_PUBLICATION_LAG_DAYS,
+            )
+            per_year_results.append(qfr)
+
+        merged_per_year: dict[int, dict[str, Any]] = {}
+        quarterly_detail_rows: list[dict[str, Any]] = []
+        total_costs = 0.0
+
+        for qfr in per_year_results:
+            for year, ftr in qfr.per_year.items():
+                merged_per_year[year] = {
+                    "long_only": ftr.long_only,
+                    "benchmark": ftr.benchmark,
+                    "costs_bps": ftr.costs_bps,
+                }
+            if qfr.quarterly_detail is not None and not qfr.quarterly_detail.empty:
+                quarterly_detail_rows.extend(
+                    qfr.quarterly_detail.to_dict(orient="records"),
+                )
+            total_costs += qfr.total_costs_bps
 
         serialised = {
-            "per_year": per_year_summary,
-            "quarterly_detail": quarterly_detail,
-            "total_costs_bps": qfr.total_costs_bps,
-            "rebalance_freq": qfr.rebalance_freq,
+            "per_year": merged_per_year,
+            "quarterly_detail": quarterly_detail_rows,
+            "total_costs_bps": total_costs,
+            "rebalance_freq": rebalance_freq,
         }
         self._backtest_cache[cache_key] = serialised
         self._save_disk_backtest_cache()
-        logger.info("Cached backtest result for %s", cache_key)
+        logger.info("Cached live walk-forward backtest result for %s", cache_key)
         return serialised
 
     # ------------------------------------------------------------------
@@ -527,7 +674,6 @@ class ModelService:
         )
         from src.regression_backtest import _select_long_with_hysteresis
 
-        result = self.load_model()
         ohlcv = self._data.ohlcv
         fundamentals = self._data.fundamentals
 
@@ -538,24 +684,29 @@ class ModelService:
         if not oos_years:
             raise ValueError(f"No simulation years for start_date={start_date}")
 
+        wf_models = self._load_walk_forward_models(oos_years)
+
         all_periods = []
+        cutoff_to_year: dict[str, int] = {}
         for yr in oos_years:
-            all_periods.extend(
-                build_quarterly_rebalance_schedule(yr, rebalance_freq, 0),
-            )
+            schedule = build_quarterly_rebalance_schedule(yr, rebalance_freq, 0)
+            all_periods.extend(schedule)
+            for p in schedule:
+                cutoff_to_year[p.cutoff] = yr
 
         cutoff_preds: dict[str, pd.Series] = {}
         universe_tickers: set[str] = set()
         for p in all_periods:
             if p.cutoff in cutoff_preds:
                 continue
+            yr = cutoff_to_year.get(p.cutoff, oos_years[-1])
             X_oos = build_oos_features(
                 ohlcv,
                 fundamentals,
                 cutoff_date=p.cutoff,
                 publication_lag_days=_PUBLICATION_LAG_DAYS,
             )
-            cutoff_preds[p.cutoff] = predict_returns(result, X_oos)
+            cutoff_preds[p.cutoff] = predict_returns(wf_models[yr], X_oos)
             universe_tickers.update(X_oos.index.tolist())
 
         all_tickers = sorted(universe_tickers)

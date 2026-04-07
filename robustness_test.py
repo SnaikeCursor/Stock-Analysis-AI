@@ -55,6 +55,7 @@ import json
 import logging
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -1619,6 +1620,10 @@ def run_quarterly_regression_validation(
 
     results["regression_results"] = regression_results
 
+    _save_wf_evaluation_results(
+        results, publication_lag_days, costs_bps, top_n,
+    )
+
     elapsed = time.time() - t0
     log.info("Regression validation finished in %.0f seconds", elapsed)
     results["elapsed_s"] = elapsed
@@ -1631,6 +1636,69 @@ def _quarterly_regression_ic(ftr: Any) -> tuple[float, float]:
     ic = float(cls.get("ic", float("nan")))
     ic_std = float(cls.get("ic_std", float("nan")))
     return ic, ic_std
+
+
+def _save_wf_evaluation_results(
+    results: dict,
+    publication_lag_days: int,
+    costs_bps: float,
+    top_n: int,
+) -> None:
+    """Persist walk-forward evaluation results so the Dashboard can read them directly."""
+    out: dict[str, Any] = {}
+    for freq_label, freq_val in REBALANCE_FREQS.items():
+        qfr = results.get(freq_label)
+        if qfr is None:
+            continue
+        per_year_ser: dict[str, Any] = {}
+        for yr, ftr in qfr.per_year.items():
+            per_year_ser[str(yr)] = {
+                "long_only": ftr.long_only,
+                "benchmark": ftr.benchmark,
+                "costs_bps": ftr.costs_bps,
+            }
+        quarterly_detail = (
+            qfr.quarterly_detail.to_dict(orient="records")
+            if qfr.quarterly_detail is not None and not qfr.quarterly_detail.empty
+            else []
+        )
+        out[freq_label] = {
+            "per_year": per_year_ser,
+            "quarterly_detail": quarterly_detail,
+            "total_costs_bps": qfr.total_costs_bps,
+            "rebalance_freq": qfr.rebalance_freq,
+        }
+
+    meta = {
+        "publication_lag_days": publication_lag_days,
+        "costs_bps": costs_bps,
+        "top_n": top_n,
+        "oos_years": list(REGIME_VALIDATION_OOS_YEARS),
+        "generated_at": datetime.now().isoformat(),
+    }
+    payload = {"meta": meta, "frequencies": out}
+
+    dest = config.DATA_DIR / "cache" / "wf_evaluation_results.json"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    def _json_safe(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: _json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_json_safe(x) for x in obj]
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating, float)) and np.isnan(obj):
+            return None
+        if isinstance(obj, (np.floating,)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+
+    with open(dest, "w", encoding="utf-8") as f:
+        json.dump(_json_safe(payload), f, indent=2)
+    log.info("Saved walk-forward evaluation results to %s", dest)
 
 
 def print_quarterly_rebalance_report(result: dict, costs_bps: float = 40.0) -> str:

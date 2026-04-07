@@ -1,13 +1,12 @@
 import { Fragment, useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { format, formatDistanceToNow } from 'date-fns'
+import { format } from 'date-fns'
 import {
   AlertTriangle,
   ArrowDown,
   ArrowLeft,
   ArrowRightLeft,
   ArrowUp,
-  Bell,
   CalendarClock,
   Check,
   Info,
@@ -24,7 +23,6 @@ import {
   api,
   type ActivatePortfolioBody,
   type ActivatePortfolioResponse,
-  type DashboardAlert,
   type ExecutedTrade,
   type PnlEntry,
   type RebalanceInstructionRow,
@@ -144,28 +142,6 @@ const INPUT_CLS =
 // ---------------------------------------------------------------------------
 // Small utility components
 // ---------------------------------------------------------------------------
-
-function alertTypeIcon(type: string) {
-  switch (type) {
-    case 'rebalancing_due':
-      return <CalendarClock className="size-3.5 text-blue-500" />
-    case 'signal_generated':
-      return <TrendingUp className="size-3.5 text-emerald-500" />
-    case 'signal_coverage_shortfall':
-      return <AlertTriangle className="size-3.5 text-amber-500" />
-    default:
-      return <Bell className="size-3.5 text-muted-foreground" />
-  }
-}
-
-function alertTypeBadge(type: string) {
-  const labels: Record<string, string> = {
-    rebalancing_due: 'Rebalancing',
-    signal_generated: 'Signal',
-    signal_coverage_shortfall: 'Coverage',
-  }
-  return labels[type] ?? type
-}
 
 function KpiCard({
   title,
@@ -712,57 +688,6 @@ function SizingCard({
 }
 
 // ---------------------------------------------------------------------------
-// Alerts Sidebar
-// ---------------------------------------------------------------------------
-
-function AlertsSidebar({ alerts }: { alerts: DashboardAlert[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bell className="size-4 opacity-70" />
-          Recent Alerts
-          {alerts.length > 0 && (
-            <Badge variant="secondary" className="ml-auto tabular-nums">
-              {alerts.length}
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {alerts.length === 0 ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Info className="size-3.5 opacity-60" />
-            No recent alerts
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {alerts.map((a) => (
-              <li key={a.id} className="flex items-start gap-2.5">
-                <span className="mt-0.5">{alertTypeIcon(a.type)}</span>
-                <div className="flex-1 space-y-0.5">
-                  <p className="text-sm leading-snug">{a.message}</p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[0.6rem]">
-                      {alertTypeBadge(a.type)}
-                    </Badge>
-                    {a.created_at && (
-                      <span className="text-[0.65rem] text-muted-foreground">
-                        {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Skeleton & Error
 // ---------------------------------------------------------------------------
 
@@ -779,8 +704,8 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="grid gap-4">
+        <Card>
           <CardHeader>
             <Skeleton className="h-4 w-32" />
           </CardHeader>
@@ -788,14 +713,6 @@ function DashboardSkeleton() {
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton className="h-8 w-full" key={i} />
             ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-4 w-24" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Skeleton className="h-20 w-full" />
           </CardContent>
         </Card>
       </div>
@@ -844,6 +761,15 @@ export function DashboardPage() {
   const [cutoffDate, setCutoffDate] = useState('')
   const [signalForSizing, setSignalForSizing] = useState<SignalOut | null>(null)
   const [activationResult, setActivationResult] = useState<ActivatePortfolioResponse | null>(null)
+
+  // -- Investment amount (persisted in localStorage) --
+  const [investmentRaw, setInvestmentRaw] = useState(() => {
+    try {
+      return localStorage.getItem('dashboard_investment_amount') ?? ''
+    } catch {
+      return ''
+    }
+  })
 
   // -- Queries --
   const dashboardQuery = useQuery({
@@ -929,7 +855,22 @@ export function DashboardPage() {
     }
     return fromApi
   }, [pnlQuery.data, dashboardQuery.data?.positions])
-  const kpis = useMemo(() => computePortfolioKpis(pnl), [pnl])
+  const investmentAmount = parseFloat(investmentRaw) || 0
+
+  const augmentedPnl = useMemo((): PnlEntry[] => {
+    if (investmentAmount <= 0 || pnl.length === 0) return pnl
+    return pnl.map((p) => {
+      const entryPrice = p.entry_price ?? p.current_price ?? 0
+      const shares = entryPrice > 0 ? Math.floor((investmentAmount * p.weight) / entryPrice) : 0
+      const entryTotal = shares * entryPrice
+      const currentValue = shares * (p.current_price ?? 0)
+      const pnlAbs = currentValue - entryTotal
+      const pnlPct = entryTotal > 0 ? pnlAbs / entryTotal : null
+      return { ...p, shares, entry_total: entryTotal, current_value: currentValue, pnl_abs: pnlAbs, pnl_pct: pnlPct }
+    })
+  }, [pnl, investmentAmount])
+
+  const kpis = useMemo(() => computePortfolioKpis(augmentedPnl), [augmentedPnl])
   const returnTrend: 'up' | 'down' | 'neutral' =
     kpis.totalPnlPct == null ? 'neutral' : kpis.totalPnlPct >= 0 ? 'up' : 'down'
 
@@ -1009,6 +950,14 @@ export function DashboardPage() {
     generateMutation.reset()
   }
 
+  // -- Investment input handler --
+  const handleInvestmentChange = (raw: string) => {
+    setInvestmentRaw(raw)
+    try {
+      localStorage.setItem('dashboard_investment_amount', raw)
+    } catch { /* quota exceeded */ }
+  }
+
   // -- Refresh handler --
   const handleRefresh = () => {
     void dashboardQuery.refetch()
@@ -1051,6 +1000,38 @@ export function DashboardPage() {
 
       {!isLoading && !isError && (
         <>
+          {/* Investment amount input */}
+          <div className="flex items-center gap-3">
+            <label
+              className="text-sm font-medium text-muted-foreground whitespace-nowrap"
+              htmlFor="dashboard-investment"
+            >
+              Investment
+            </label>
+            <div className="relative">
+              <input
+                id="dashboard-investment"
+                type="number"
+                min={0}
+                step={1000}
+                placeholder="e.g. 100 000"
+                value={investmentRaw}
+                onChange={(e) => handleInvestmentChange(e.target.value)}
+                className="flex h-8 w-48 rounded-md border border-border bg-background px-3 pr-10 text-sm tabular-nums outline-none focus:ring-2 focus:ring-ring/50"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                CHF
+              </span>
+            </div>
+            {investmentAmount > 0 && kpis.count > 0 && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                Allocated: {fmtChf(kpis.totalInvested)} CHF
+                {' · '}
+                Remainder: {fmtChf(investmentAmount - kpis.totalInvested)} CHF
+              </span>
+            )}
+          </div>
+
           {/* KPI row */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
@@ -1061,9 +1042,11 @@ export function DashboardPage() {
                   : '—'
               }
               subtitle={
-                kpis.totalInvested > 0
-                  ? `Invested: ${fmtChf(kpis.totalInvested)} CHF`
-                  : `${kpis.count} active positions`
+                investmentAmount > 0
+                  ? `Investment: ${fmtChf(investmentAmount)} CHF`
+                  : kpis.totalInvested > 0
+                    ? `Invested: ${fmtChf(kpis.totalInvested)} CHF`
+                    : `${kpis.count} active positions`
               }
               icon={Wallet}
             />
@@ -1268,10 +1251,9 @@ export function DashboardPage() {
             />
           )}
 
-          {/* Main content: Portfolio + Alerts */}
-          <div className="grid gap-4 lg:grid-cols-3">
-            {/* Active Portfolio */}
-            <Card className="lg:col-span-2">
+          {/* Main content: Active Portfolio */}
+          <div className="grid gap-4">
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Wallet className="size-4 opacity-70" />
@@ -1314,7 +1296,7 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <PortfolioTable
-                  positions={pnl}
+                  positions={augmentedPnl}
                   onClosePosition={openClose}
                   onEditPosition={handleEditPosition}
                   editingId={editingId}
@@ -1380,9 +1362,6 @@ export function DashboardPage() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Sidebar: Alerts */}
-            <AlertsSidebar alerts={dashboardData?.alerts ?? []} />
           </div>
         </>
       )}
