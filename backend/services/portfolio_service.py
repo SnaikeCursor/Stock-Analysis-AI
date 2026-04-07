@@ -25,6 +25,7 @@ from backend.models.db import (
     Signal,
     SignalStatus,
 )
+from backend.portfolio_json import parse_portfolio_json
 from backend.services.data_service import DataService
 
 logger = logging.getLogger(__name__)
@@ -109,12 +110,28 @@ class PortfolioService:
             )
             session.add(position)
 
+        _, req_top = parse_portfolio_json(portfolio_json)
+        n_pos = len(portfolio)
+        base_msg = (
+            f"New signal generated ({cutoff_date}): {n_pos} positions, regime={regime_label}"
+        )
+        if req_top is not None and n_pos < req_top:
+            base_msg += f" — requested {req_top}, only {n_pos} available"
         alert = Alert(
             type=AlertType.SIGNAL_GENERATED,
-            message=f"New signal generated ({cutoff_date}): "
-            f"{len(portfolio)} positions, regime={regime_label}",
+            message=base_msg,
         )
         session.add(alert)
+        if req_top is not None and n_pos < req_top:
+            session.add(
+                Alert(
+                    type=AlertType.SIGNAL_COVERAGE_SHORTFALL,
+                    message=(
+                        f"Only {n_pos} of {req_top} requested long positions are available "
+                        f"at cutoff {cutoff_date}. Some tickers lack sufficient OHLCV or features."
+                    ),
+                )
+            )
 
         await session.commit()
         logger.info("Signal %d saved with %d positions", signal.id, len(portfolio))
@@ -496,10 +513,7 @@ class PortfolioService:
         res_pos = await session.execute(stmt_pos)
         old_positions = list(res_pos.scalars().all())
 
-        try:
-            new_pf = json.loads(new_signal.portfolio_json)
-        except (json.JSONDecodeError, TypeError):
-            new_pf = []
+        new_pf, _ = parse_portfolio_json(new_signal.portfolio_json)
 
         tickers = set()
         for p in old_positions:

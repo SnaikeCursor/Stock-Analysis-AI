@@ -8,7 +8,6 @@ Endpoints:
 
 from __future__ import annotations
 
-import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -16,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.db import SignalStatus, get_session
+from backend.portfolio_json import parse_portfolio_json
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
 
@@ -54,6 +54,10 @@ class SignalOut(BaseModel):
     created_at: str | None = None
     model_phase: str = "Lag60-SA"
     rebalance_freq: str = "semi-annual"
+    requested_top_n: int | None = Field(
+        None,
+        description="Requested long count; may exceed len(portfolio) if data coverage is thin.",
+    )
 
 
 # ------------------------------------------------------------------
@@ -110,6 +114,7 @@ async def generate_signal(
         ],
         status=signal.status.value if hasattr(signal.status, "value") else signal.status,
         created_at=signal.created_at.isoformat() if signal.created_at else None,
+        requested_top_n=result.requested_top_n,
     )
 
 
@@ -124,7 +129,7 @@ async def get_latest_signal(
     if signal is None:
         return None
 
-    portfolio = json.loads(signal.portfolio_json) if signal.portfolio_json else []
+    portfolio, req_top = parse_portfolio_json(signal.portfolio_json)
 
     return SignalOut(
         id=signal.id,
@@ -139,6 +144,7 @@ async def get_latest_signal(
         ],
         status=signal.status.value if hasattr(signal.status, "value") else signal.status,
         created_at=signal.created_at.isoformat() if signal.created_at else None,
+        requested_top_n=req_top,
     )
 
 
@@ -152,7 +158,7 @@ async def get_signal_history(
 
     results: list[SignalOut] = []
     for sig in signals:
-        portfolio = json.loads(sig.portfolio_json) if sig.portfolio_json else []
+        portfolio, req_top = parse_portfolio_json(sig.portfolio_json)
         results.append(
             SignalOut(
                 id=sig.id,
@@ -167,6 +173,7 @@ async def get_signal_history(
                 ],
                 status=sig.status.value if hasattr(sig.status, "value") else sig.status,
                 created_at=sig.created_at.isoformat() if sig.created_at else None,
+                requested_top_n=req_top,
             )
         )
 

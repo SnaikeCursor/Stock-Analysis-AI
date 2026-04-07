@@ -69,6 +69,9 @@ export type DashboardSignal = {
   cutoff_date: string
   created_at: string | null
   status: string
+  /** From persisted signal JSON; omitted for legacy rows. */
+  n_positions?: number
+  requested_top_n?: number | null
 }
 
 export type DashboardPosition = {
@@ -117,6 +120,8 @@ export type SignalOut = {
   created_at: string | null
   model_phase?: string
   rebalance_freq?: string
+  /** Requested long count; may exceed len(portfolio) if coverage is thin. */
+  requested_top_n?: number | null
 }
 
 export type GenerateSignalBody = {
@@ -165,6 +170,40 @@ export type QuarterlyDetail = {
 export type HistoryQuarterlyResponse = {
   quarterly_detail: QuarterlyDetail[]
   total_costs_bps: number
+}
+
+export type SimulateTimelinePoint = {
+  date: string
+  portfolio_value: number
+  benchmark_value: number
+}
+
+export type SimulateTransaction = {
+  date: string
+  ticker: string
+  action: 'buy' | 'sell'
+  shares: number
+  price: number
+  value: number
+}
+
+export type SimulateSummary = {
+  initial_capital: number
+  final_value: number
+  total_return: number
+  annualized_return: number
+  sharpe_ratio: number
+  max_drawdown: number
+  total_costs: number
+  n_trades: number
+  benchmark_final_value: number
+  benchmark_total_return: number
+}
+
+export type SimulateResponse = {
+  timeline: SimulateTimelinePoint[]
+  transactions: SimulateTransaction[]
+  summary: SimulateSummary
 }
 
 export type PositionDetail = {
@@ -297,6 +336,7 @@ export type ExecuteRebalanceResponse = {
 export type PortfolioHistorySignal = {
   signal_id: number
   cutoff_date: string
+  regime_label?: string | null
   status: string
   created_at: string | null
   positions: PositionDetail[]
@@ -330,6 +370,12 @@ export const api = {
         start_year: String(startYear),
         end_year: String(endYear),
       })}`,
+    ),
+
+  simulateBacktest: (body: { start_date: string; initial_capital: number; costs_bps: number }) =>
+    request<SimulateResponse>(
+      '/api/history/simulate',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
     ),
 
   getPortfolio: () => request<PositionDetail[]>('/api/portfolio'),

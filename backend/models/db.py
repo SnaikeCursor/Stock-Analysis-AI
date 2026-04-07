@@ -64,6 +64,7 @@ class AlertType(str, enum.Enum):
     REBALANCING_DUE = "rebalancing_due"
     REGIME_CHANGE = "regime_change"
     SIGNAL_GENERATED = "signal_generated"
+    SIGNAL_COVERAGE_SHORTFALL = "signal_coverage_shortfall"
 
 
 # ------------------------------------------------------------------

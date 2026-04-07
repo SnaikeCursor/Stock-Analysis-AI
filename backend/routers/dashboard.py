@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.db import get_session
+from backend.portfolio_json import parse_portfolio_json
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -55,15 +56,18 @@ async def get_dashboard(
     # --- Latest signal metadata ---
     signal_meta: dict[str, Any] | None = None
     if signal is not None:
+        pf_list, req_top = parse_portfolio_json(signal.portfolio_json)
         signal_meta = {
             "id": signal.id,
             "cutoff_date": signal.cutoff_date,
             "created_at": signal.created_at.isoformat() if signal.created_at else None,
             "status": signal.status.value if hasattr(signal.status, "value") else signal.status,
+            "n_positions": len(pf_list),
+            "requested_top_n": req_top,
         }
 
-    # --- Recent alerts ---
-    all_alerts = await portfolio_svc.get_unread_alerts(session)
+    # --- Recent alerts (newest first; includes read — last 5 overall) ---
+    all_alerts = await portfolio_svc.get_all_alerts(session)
     recent_alerts = [
         {
             "id": a.id,

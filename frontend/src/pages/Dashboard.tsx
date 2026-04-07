@@ -25,7 +25,6 @@ import {
   type ActivatePortfolioBody,
   type ActivatePortfolioResponse,
   type DashboardAlert,
-  type DashboardResponse,
   type ExecutedTrade,
   type PnlEntry,
   type RebalanceInstructionRow,
@@ -152,6 +151,8 @@ function alertTypeIcon(type: string) {
       return <CalendarClock className="size-3.5 text-blue-500" />
     case 'signal_generated':
       return <TrendingUp className="size-3.5 text-emerald-500" />
+    case 'signal_coverage_shortfall':
+      return <AlertTriangle className="size-3.5 text-amber-500" />
     default:
       return <Bell className="size-3.5 text-muted-foreground" />
   }
@@ -161,6 +162,7 @@ function alertTypeBadge(type: string) {
   const labels: Record<string, string> = {
     rebalancing_due: 'Rebalancing',
     signal_generated: 'Signal',
+    signal_coverage_shortfall: 'Coverage',
   }
   return labels[type] ?? type
 }
@@ -918,8 +920,15 @@ export function DashboardPage() {
     },
   })
 
-  // -- Derived state --
-  const pnl = pnlQuery.data ?? []
+  // -- Derived state: prefer dashboard `positions` (full `compute_live_pnl` rows); avoid stripping fields --
+  const pnl = useMemo((): PnlEntry[] => {
+    const fromApi = pnlQuery.data ?? []
+    const fromDash = dashboardQuery.data?.positions
+    if (fromDash && fromDash.length > 0) {
+      return fromDash as PnlEntry[]
+    }
+    return fromApi
+  }, [pnlQuery.data, dashboardQuery.data?.positions])
   const kpis = useMemo(() => computePortfolioKpis(pnl), [pnl])
   const returnTrend: 'up' | 'down' | 'neutral' =
     kpis.totalPnlPct == null ? 'neutral' : kpis.totalPnlPct >= 0 ? 'up' : 'down'
@@ -1214,9 +1223,24 @@ export function DashboardPage() {
                   <Sparkles className="size-4 text-blue-600" />
                   Pending Signal
                 </CardTitle>
-                <CardDescription>
-                  Signal #{latestSignalQuery.data.id} from {latestSignalQuery.data.cutoff_date} has not been activated yet.
-                  Configure your trades to start tracking your portfolio.
+                <CardDescription className="flex flex-wrap items-center gap-2">
+                  <span>
+                    Signal #{latestSignalQuery.data.id} from {latestSignalQuery.data.cutoff_date} has not been activated yet.
+                    Configure your trades to start tracking your portfolio.
+                  </span>
+                  {latestSignalQuery.data.requested_top_n != null &&
+                    latestSignalQuery.data.portfolio.length <
+                      latestSignalQuery.data.requested_top_n && (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-500/55 text-[0.65rem] text-amber-900 dark:text-amber-100"
+                        title="Fewer names than requested: some tickers lack sufficient OHLCV or model features at this cutoff."
+                      >
+                        <Info className="mr-0.5 inline size-3 opacity-80" aria-hidden />
+                        {latestSignalQuery.data.portfolio.length} of{' '}
+                        {latestSignalQuery.data.requested_top_n} positions
+                      </Badge>
+                    )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1254,12 +1278,26 @@ export function DashboardPage() {
                   Active Portfolio
                 </CardTitle>
                 {dashboardData?.signal && (
-                  <CardDescription>
+                  <CardDescription className="flex flex-wrap items-center gap-x-1 gap-y-1">
                     Signal from {dashboardData.signal.cutoff_date}
                     {' · '}
                     <Badge variant="secondary" className="ml-1 text-[0.65rem]">
                       {dashboardData.signal.status}
                     </Badge>
+                    {dashboardData.signal.n_positions != null &&
+                      dashboardData.signal.requested_top_n != null &&
+                      dashboardData.signal.n_positions <
+                        dashboardData.signal.requested_top_n && (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/55 text-[0.65rem] text-amber-900 dark:text-amber-100"
+                          title="Fewer names than requested: some tickers lack sufficient OHLCV or model features at this cutoff."
+                        >
+                          <Info className="mr-0.5 inline size-3 opacity-80" aria-hidden />
+                          {dashboardData.signal.n_positions} of{' '}
+                          {dashboardData.signal.requested_top_n} positions
+                        </Badge>
+                      )}
                     {kpis.count > 0 && dashboardData.signal.status === 'active' && (
                       <>
                         {' · '}
