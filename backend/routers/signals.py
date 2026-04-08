@@ -8,6 +8,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -77,7 +78,8 @@ async def generate_signal(
     cutoff = body.cutoff_date or date.today().isoformat()
 
     try:
-        result = model_svc.generate_signal(
+        result = await asyncio.to_thread(
+            model_svc.generate_signal,
             cutoff,
             top_n=body.top_n,
             max_weight=body.max_weight,
@@ -98,7 +100,9 @@ async def generate_signal(
     )
 
     tickers = [p["ticker"] for p in result.portfolio]
-    price_map = portfolio_svc.get_current_prices_for_tickers(tickers)
+    price_map = await asyncio.to_thread(
+        portfolio_svc.get_current_prices_for_tickers, tickers,
+    )
 
     return SignalOut(
         id=signal.id,

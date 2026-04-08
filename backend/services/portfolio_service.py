@@ -7,6 +7,7 @@ P&L computation.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -253,19 +254,15 @@ class PortfolioService:
         if not positions:
             return []
 
-        self._data.ensure_data_covers(date.today().isoformat())
+        tickers = [p.ticker for p in positions]
+        price_map = await asyncio.to_thread(
+            self.get_current_prices_for_tickers, tickers,
+        )
 
         results: list[dict[str, Any]] = []
         for pos in positions:
-            current_price: float | None = None
+            current_price: float | None = price_map.get(pos.ticker)
             pnl_pct: float | None = None
-
-            try:
-                df = self._data.get_ticker_price(pos.ticker)
-                if not df.empty and "Close" in df.columns:
-                    current_price = round(float(df["Close"].iloc[-1]), 2)
-            except (KeyError, Exception) as exc:
-                logger.debug("Price lookup failed for %s: %s", pos.ticker, exc)
 
             if pos.entry_price and current_price and pos.entry_price > 0:
                 pnl_pct = round((current_price - pos.entry_price) / pos.entry_price, 6)
@@ -521,7 +518,9 @@ class PortfolioService:
         for entry in new_pf:
             tickers.add(entry["ticker"])
 
-        prices = self.get_current_prices_for_tickers(sorted(tickers))
+        prices = await asyncio.to_thread(
+            self.get_current_prices_for_tickers, sorted(tickers),
+        )
         payload = self.compute_rebalance_instructions(
             old_positions=old_positions,
             new_portfolio=new_pf,
@@ -816,7 +815,9 @@ class PortfolioService:
         if not tickers:
             return
 
-        prices = self.get_current_prices_for_tickers(tickers)
+        prices = await asyncio.to_thread(
+            self.get_current_prices_for_tickers, tickers,
+        )
         today = date.today().isoformat()
 
         for pos in positions:
