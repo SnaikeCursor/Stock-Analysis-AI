@@ -979,10 +979,6 @@ def load_data(
         ohlcv[MACRO_BENCHMARK_TICKER] = smi_ohlcv
     log.info("Universe (no static filter; dynamic per cutoff): %d tickers", len(ohlcv))
 
-    fundamentals: dict[str, dict] = {}
-    for t in ohlcv:
-        fundamentals[t] = load_fundamentals(t, cache_dir=cache)
-
     from src.eulerpool_fundamentals import fetch_all_quarterly
 
     stock_tickers = [t for t in ohlcv if t != MACRO_BENCHMARK_TICKER]
@@ -993,6 +989,22 @@ def load_data(
         n_with_data,
         len(stock_tickers),
     )
+
+    fundamentals: dict[str, dict] = {}
+    n_no_eulerpool = sum(1 for t in stock_tickers if not eulerpool_q.get(t))
+    if n_no_eulerpool > 0:
+        log.info(
+            "Loading yfinance fundamentals as fallback for %d tickers without Eulerpool data",
+            n_no_eulerpool,
+        )
+        for t in stock_tickers:
+            if not eulerpool_q.get(t):
+                fundamentals[t] = load_fundamentals(t, cache_dir=cache)
+            else:
+                fundamentals[t] = {}
+    else:
+        log.info("All tickers covered by Eulerpool — skipping yfinance fundamentals")
+        fundamentals = {t: {} for t in ohlcv}
 
     return ohlcv, fundamentals, eulerpool_q, eulerpool_profiles
 
@@ -1506,13 +1518,13 @@ def run_quarterly_regression_validation(
     eulerpool_profiles: dict[str, dict] | None = None,
     publication_lag_days: int = 0,
     cutoff_shift_days: int = 0,
+    freq_filter: str | None = None,
 ) -> dict:
-    """Walk-forward regression evaluation at three rebalancing frequencies.
+    """Walk-forward regression evaluation at selected rebalancing frequencies.
 
     For each OOS year in :data:`REGIME_VALIDATION_OOS_YEARS`, trains a
     single regression model on forward returns, then evaluates via
-    :func:`evaluate_forward_quarterly_regression` at quarterly /
-    semi-annual / annual frequencies.
+    :func:`evaluate_forward_quarterly_regression`.
 
     Parameters
     ----------
@@ -1532,10 +1544,12 @@ def run_quarterly_regression_validation(
         / :func:`~regression_targets.compute_annual_forward_returns`,
         :func:`build_regression_feature_panel`, and
         :func:`~backtest.evaluate_forward_quarterly_regression`.
+    freq_filter
+        If given (e.g. ``"semi_annual"``), only evaluate that single
+        frequency instead of all three.
 
-    Returns a dict keyed by frequency label (``quarterly``, ``semi_annual``,
-    ``annual``) -> :class:`~backtest.QuarterlyForwardResult`, plus
-    ``regression_results`` and ``elapsed_s``.
+    Returns a dict keyed by frequency label -> :class:`~backtest.QuarterlyForwardResult`,
+    plus ``regression_results`` and ``elapsed_s``.
     """
     t0 = time.time()
 
@@ -1593,8 +1607,18 @@ def run_quarterly_regression_validation(
         )
         regression_results[yr] = reg_result
 
+    freqs_to_eval = REBALANCE_FREQS
+    if freq_filter is not None:
+        if freq_filter not in REBALANCE_FREQS:
+            raise ValueError(
+                f"Unknown freq_filter={freq_filter!r}; "
+                f"choose from {list(REBALANCE_FREQS)}"
+            )
+        freqs_to_eval = {freq_filter: REBALANCE_FREQS[freq_filter]}
+        log.info("Frequency filter: evaluating only %s", freq_filter)
+
     results: dict[str, object] = {}
-    for freq_label, freq_val in REBALANCE_FREQS.items():
+    for freq_label, freq_val in freqs_to_eval.items():
         log.info(
             "Regression validation: freq=%s (rebalance_freq=%d) …",
             freq_label,
@@ -1636,6 +1660,131 @@ def _quarterly_regression_ic(ftr: Any) -> tuple[float, float]:
     ic = float(cls.get("ic", float("nan")))
     ic_std = float(cls.get("ic_std", float("nan")))
     return ic, ic_std
+
+
+def _run_regression_leakage_checks(
+    regression_results: dict[int, RegressionTrainResult],
+    n_shuffles: int = 200,
+) -> list[dict[str, Any]]:
+    """Walk-forward leakage diagnostics for regression models.
+
+    For each OOS year verifies:
+    1. **Embargo**: last training quarter strictly before OOS year.
+    2. **In-sample IC**: Spearman rho on training data (should be moderate, not 1.0).
+    3. **Holdout IC**: Spearman rho on the time-series holdout split.
+    4. **Shuffled-label IC**: Mean |IC| when holdout actuals are permuted
+       (should collapse to ~0; a high value signals structural leakage).
+    5. **IS/HO gap**: Large gap flags overfitting; negative HO IC flags
+       broken signal.
+    """
+    from scipy.stats import spearmanr
+    from src.regression_model import predict_returns
+
+    rng = np.random.RandomState(42)
+    report: list[dict[str, Any]] = []
+
+    for yr in sorted(regression_results):
+        rr = regression_results[yr]
+
+        train_periods = (
+            sorted(set(rr.period_labels_train))
+            if rr.period_labels_train is not None
+            else []
+        )
+        latest_train = train_periods[-1] if train_periods else "N/A"
+        embargo_ok = latest_train < f"{yr}Q1" if latest_train != "N/A" else False
+
+        is_preds = predict_returns(rr, rr.X_train)
+        is_ic = float(spearmanr(is_preds, rr.y_train).statistic)
+
+        ho_ic = float("nan")
+        mean_shuf_ic = float("nan")
+        if rr.X_test is not None and len(rr.X_test):
+            ho_preds = predict_returns(rr, rr.X_test)
+            ho_ic = float(spearmanr(ho_preds, rr.y_test).statistic)
+
+            shuffled_ics = []
+            for _ in range(n_shuffles):
+                y_shuf = rng.permutation(rr.y_test)
+                shuf_ic, _ = spearmanr(ho_preds, y_shuf)
+                shuffled_ics.append(abs(shuf_ic))
+            mean_shuf_ic = float(np.mean(shuffled_ics))
+
+        entry: dict[str, Any] = {
+            "oos_year": yr,
+            "training_quarters": f"{train_periods[0]}–{latest_train}" if train_periods else "N/A",
+            "n_train_quarters": len(train_periods),
+            "n_train_samples": len(rr.X_train),
+            "embargo_ok": embargo_ok,
+            "in_sample_ic": round(is_ic, 4),
+            "holdout_ic": round(ho_ic, 4),
+            "shuffled_ic_mean": round(mean_shuf_ic, 4),
+        }
+        report.append(entry)
+
+        status = "✅" if embargo_ok else "⚠️"
+        log.info(
+            "Leakage [OOS %d] embargo=%s  train=%s–%s (%d Q, %d samples)  "
+            "IS-IC=%.3f  HO-IC=%.3f  shuffled-|IC|=%.4f",
+            yr, status, train_periods[0] if train_periods else "?",
+            latest_train, len(train_periods), len(rr.X_train),
+            is_ic, ho_ic, mean_shuf_ic,
+        )
+
+    return report
+
+
+def _print_leakage_report(report: list[dict[str, Any]]) -> str:
+    """Pretty-print regression leakage diagnostics."""
+    lines: list[str] = []
+    sep = "=" * 72
+
+    lines.append(sep)
+    lines.append("  REGRESSION WALK-FORWARD LEAKAGE DIAGNOSTICS")
+    lines.append(sep)
+
+    all_embargo_ok = all(r["embargo_ok"] for r in report)
+    lines.append(f"\n  Embargo check: {'✅ ALL OK' if all_embargo_ok else '⚠️  VIOLATIONS DETECTED'}")
+
+    lines.append(
+        f"\n  {'year':>6s}  {'embargo':>8s}  {'train window':>18s}  "
+        f"{'#Q':>4s}  {'#samp':>6s}  {'IS-IC':>7s}  {'HO-IC':>7s}  "
+        f"{'shuf|IC|':>9s}"
+    )
+    lines.append("  " + "-" * 78)
+    for r in report:
+        emb = "✅" if r["embargo_ok"] else "⚠️"
+        lines.append(
+            f"  {r['oos_year']:>6d}  {emb:>8s}  {r['training_quarters']:>18s}  "
+            f"{r['n_train_quarters']:>4d}  {r['n_train_samples']:>6d}  "
+            f"{r['in_sample_ic']:>7.4f}  {r['holdout_ic']:>7.4f}  "
+            f"{r['shuffled_ic_mean']:>9.4f}"
+        )
+
+    mean_shuf = np.mean([r["shuffled_ic_mean"] for r in report if np.isfinite(r["shuffled_ic_mean"])])
+    mean_ho = np.mean([r["holdout_ic"] for r in report if np.isfinite(r["holdout_ic"])])
+    mean_is = np.mean([r["in_sample_ic"] for r in report if np.isfinite(r["in_sample_ic"])])
+
+    lines.append(f"\n  Mean IS IC:         {mean_is:.4f}")
+    lines.append(f"  Mean holdout IC:    {mean_ho:.4f}")
+    lines.append(f"  Mean shuffled |IC|: {mean_shuf:.4f}")
+    lines.append(f"  IS→HO gap:          {mean_is - mean_ho:.4f}")
+
+    if mean_shuf < 0.05:
+        lines.append("  → ✅ Shuffled IC near zero — no structural leakage detected.")
+    else:
+        lines.append("  → ⚠️  Shuffled IC elevated — possible structural artefact.")
+
+    if mean_is - mean_ho > 0.3:
+        lines.append("  → ⚠️  Large IS/HO gap — model may be overfitting.")
+    else:
+        lines.append("  → ✅ IS/HO gap moderate — no severe overfitting.")
+
+    lines.append(sep)
+
+    text = "\n".join(lines)
+    print(text)
+    return text
 
 
 def _save_wf_evaluation_results(
@@ -2295,6 +2444,16 @@ def _pub_shift_days_from_argv(argv: list[str]) -> int:
     return 0
 
 
+def _freq_from_argv(argv: list[str]) -> str | None:
+    """Parse ``--freq semi_annual`` or ``--freq=semi_annual``."""
+    for i, a in enumerate(argv):
+        if a.startswith("--freq="):
+            return a.split("=", 1)[1].strip() or None
+        if a == "--freq" and i + 1 < len(argv):
+            return argv[i + 1].strip() or None
+    return None
+
+
 def main() -> None:
     t_global = time.time()
     argv = sys.argv
@@ -2305,6 +2464,8 @@ def main() -> None:
     cs_norm = "--cs-norm" in argv
     pub_lag_days = _pub_lag_days_from_argv(argv)
     pub_shift_days = _pub_shift_days_from_argv(argv)
+    freq_filter = _freq_from_argv(argv)
+    leakage_check = "--leakage-check" in argv
     run_regime_phase5 = "--regime-validation" in argv or regime_only
     use_model_cache = _use_joblib_model_cache_from_argv(argv)
     target_horizon = "annual" if annual_target else "quarterly"
@@ -2347,6 +2508,10 @@ def main() -> None:
             "Flag --pub-shift: training and eval cutoffs shifted forward %d calendar days",
             pub_shift_days,
         )
+    if freq_filter and quarterly_only:
+        log.info("Flag --freq: evaluating only frequency '%s'", freq_filter)
+    if leakage_check and quarterly_only:
+        log.info("Flag --leakage-check: running walk-forward leakage diagnostics after training")
 
     if regime_only:
         ohlcv, fundamentals, _, _ = load_data(force_refresh_ohlcv=refresh)
@@ -2360,7 +2525,8 @@ def main() -> None:
         ohlcv, fundamentals, eulerpool_q, eulerpool_prof = load_data(
             force_refresh_ohlcv=refresh,
         )
-        log.info("╔══ Regression quarterly validation (walk-forward, 3 frequencies) ══╗")
+        freq_desc = freq_filter or "3 frequencies"
+        log.info("╔══ Regression quarterly validation (walk-forward, %s) ══╗", freq_desc)
         rq = run_quarterly_regression_validation(
             ohlcv,
             fundamentals,
@@ -2371,8 +2537,14 @@ def main() -> None:
             eulerpool_profiles=eulerpool_prof,
             publication_lag_days=pub_lag_days,
             cutoff_shift_days=pub_shift_days,
+            freq_filter=freq_filter,
         )
         print_quarterly_rebalance_report(rq)
+
+        if leakage_check and "regression_results" in rq:
+            log.info("╔══ Leakage Diagnostics ══╗")
+            lk_report = _run_regression_leakage_checks(rq["regression_results"])
+            _print_leakage_report(lk_report)
 
         log.info("╔══ Rolling-Annual Evaluation (12-Monats-Hold ab jedem Cutoff) ══╗")
         rolling = evaluate_rolling_annual(

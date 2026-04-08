@@ -621,13 +621,13 @@ def train_regressor(
 
         base = XGBRegressor(
             random_state=rs,
-            n_jobs=-1,
+            n_jobs=1,
             verbosity=0,
             objective="reg:squarederror",
         )
         grid = param_grid or _xgb_reg_param_grid()
     else:
-        base = RandomForestRegressor(random_state=rs, n_jobs=-1)
+        base = RandomForestRegressor(random_state=rs, n_jobs=1)
         grid = param_grid or _rf_reg_param_grid()
 
     if tune:
@@ -647,7 +647,7 @@ def train_regressor(
             grid,
             cv=prep.cv,
             scoring=_ic_scorer,
-            n_jobs=-1,
+            n_jobs=1,
             refit=True,
             return_train_score=False,
         )
@@ -713,10 +713,10 @@ def train_regression_ensemble(
 
     from xgboost import XGBRegressor
 
-    rf_base = RandomForestRegressor(random_state=rs, n_jobs=-1)
+    rf_base = RandomForestRegressor(random_state=rs, n_jobs=1)
     xgb_base = XGBRegressor(
         random_state=rs,
-        n_jobs=-1,
+        n_jobs=1,
         verbosity=0,
         objective="reg:squarederror",
     )
@@ -742,7 +742,7 @@ def train_regression_ensemble(
             grid_rf,
             cv=prep.cv,
             scoring=_ic_scorer,
-            n_jobs=-1,
+            n_jobs=1,
             refit=True,
             return_train_score=False,
         )
@@ -753,7 +753,7 @@ def train_regression_ensemble(
             grid_xgb,
             cv=prep.cv,
             scoring=_ic_scorer,
-            n_jobs=-1,
+            n_jobs=1,
             refit=True,
             return_train_score=False,
         )
