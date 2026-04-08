@@ -67,8 +67,8 @@ async def lifespan(app: FastAPI):
     try:
         model_service.load_model()
         logger.info("Lag60 Semi-Annual regression model loaded")
-    except FileNotFoundError as exc:
-        logger.warning("Model cache not found — signal generation will fail until trained: %s", exc)
+    except Exception as exc:
+        logger.warning("Model not available at startup — signal generation will fail until trained: %s", exc)
 
     _apscheduler.start()
     logger.info(
@@ -123,8 +123,16 @@ app.include_router(alerts.router)
 
 @app.get("/api/health")
 async def health():
+    data_ok = data_service.is_loaded
+    model_ok = model_service.is_loaded
+    if data_ok and model_ok:
+        status = "ok"
+    elif data_ok:
+        status = "degraded"
+    else:
+        status = "unavailable"
     return {
-        "status": "ok",
-        "data_loaded": data_service.is_loaded,
-        "model_loaded": model_service.is_loaded,
+        "status": status,
+        "data_loaded": data_ok,
+        "model_loaded": model_ok,
     }
