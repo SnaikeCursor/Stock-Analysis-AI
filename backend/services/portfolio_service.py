@@ -665,6 +665,18 @@ class PortfolioService:
             (await session.execute(stmt_old_pos)).scalars().all()
         )
 
+        fallback_tickers = [
+            pos.ticker
+            for pos in old_positions
+            if pos.exit_price is None
+            and not (trades_by_ticker.get(pos.ticker, {}).get("action") == "sell")
+        ]
+        fallback_prices: dict[str, float | None] = {}
+        if fallback_tickers:
+            fallback_prices = await asyncio.to_thread(
+                self.get_current_prices_for_tickers, fallback_tickers,
+            )
+
         for pos in old_positions:
             if pos.exit_price is not None:
                 continue
@@ -673,8 +685,7 @@ class PortfolioService:
                 pos.exit_price = float(trade["price"])
                 pos.exit_date = trade.get("date") or date.today().isoformat()
             else:
-                price = self.get_current_prices_for_tickers([pos.ticker]).get(pos.ticker)
-                pos.exit_price = price
+                pos.exit_price = fallback_prices.get(pos.ticker)
                 pos.exit_date = date.today().isoformat()
             _sync_position_derived_fields(pos)
 
