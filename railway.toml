@@ -1,11 +1,18 @@
-# Railway — deploy the FastAPI backend as a Docker service.
-# In Railway: New Project → Deploy from repo → set root to this repository.
-# Add a persistent volume (or mount) at /app/data for SQLite, joblib models,
-# and OHLCV parquet cache so restarts keep state.
+# Railway — FastAPI backend (Dockerfile.backend, repo root as service root).
 #
-# Frontend: create a second Railway service using frontend/Dockerfile with
-# build args VITE_API_BASE_URL=<your backend public URL> and NGINX_CONF=nginx.static.conf,
-# or host the static build on any CDN.
+# Dashboard checklist:
+#   1. New Project → Deploy from GitHub → select this repo (root directory: /).
+#   2. Variables → add EULERPOOL_API_KEY (required for live data).
+#   3. Volumes → New Volume → mount path exactly: /app/data
+#      (SQLite at data/stock_analysis.db, parquet cache, joblib models).
+#   4. Generate public URL (Settings → Networking) and set GitHub secret
+#      VITE_API_BASE_URL to that origin, no trailing slash (GitHub Pages build).
+#
+# Optional variable DATABASE_URL overrides the default SQLite URL (same driver
+# must be installed; default is sqlite+aiosqlite:///data/stock_analysis.db).
+#
+# Frontend: GitHub Actions workflow builds static assets; or a second Railway
+# service with frontend/Dockerfile + VITE_API_BASE_URL build arg.
 
 [build]
 builder = "DOCKERFILE"

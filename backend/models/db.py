@@ -14,6 +14,7 @@ Tables:
 from __future__ import annotations
 
 import enum
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -37,7 +38,9 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
-DATABASE_URL = "sqlite+aiosqlite:///data/stock_analysis.db"
+# Relative path resolves against process cwd (Docker WORKDIR /app → /app/data/…).
+_DEFAULT_DB = "sqlite+aiosqlite:///data/stock_analysis.db"
+DATABASE_URL = (os.environ.get("DATABASE_URL") or _DEFAULT_DB).strip() or _DEFAULT_DB
 
 engine = create_async_engine(DATABASE_URL, echo=False, future=True)
 async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

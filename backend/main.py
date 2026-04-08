@@ -10,6 +10,8 @@ Run with::
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -58,25 +60,40 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialised")
 
-    try:
-        data_service.load_cached()
-        logger.info("OHLCV cache loaded (%d tickers)", len(data_service.ohlcv))
-    except Exception as exc:
-        logger.warning("Could not load OHLCV cache on startup: %s", exc)
-
-    try:
-        model_service.load_model()
-        logger.info("Lag60 Semi-Annual regression model loaded")
-    except Exception as exc:
-        logger.warning("Model not available at startup — signal generation will fail until trained: %s", exc)
-
     _apscheduler.start()
     logger.info(
         "APScheduler started — weekly OHLCV (Mon 05:30 UTC), "
         "semi-annual signals (2 Jan & 1 Jul 06:00 UTC)"
     )
 
+    async def _bootstrap_heavy_io() -> None:
+        """OHLCV + model load can take many minutes on a cold cache (yfinance).
+
+        Must not run before ``yield`` — Uvicorn only accepts connections after
+        startup completes, so Railway/Docker healthchecks would time out.
+        """
+        try:
+            await asyncio.to_thread(data_service.load_cached)
+            logger.info("OHLCV cache loaded (%d tickers)", len(data_service.ohlcv))
+        except Exception as exc:
+            logger.warning("Could not load OHLCV cache on startup: %s", exc)
+
+        try:
+            await asyncio.to_thread(model_service.load_model)
+            logger.info("Lag60 Semi-Annual regression model loaded")
+        except Exception as exc:
+            logger.warning(
+                "Model not available at startup — signal generation will fail until trained: %s",
+                exc,
+            )
+
+    bootstrap_task = asyncio.create_task(_bootstrap_heavy_io())
+
     yield
+
+    bootstrap_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await bootstrap_task
 
     _apscheduler.shutdown(wait=False)
     logger.info("APScheduler stopped; shutting down …")
