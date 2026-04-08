@@ -73,8 +73,7 @@ async def lifespan(app: FastAPI):
     _apscheduler.start()
     logger.info(
         "APScheduler started — weekly OHLCV (Mon 05:30 UTC), "
-        "semi-annual signals (2 Jan & 1 Jul 06:00 UTC), "
-        "daily regime check (07:00 UTC)"
+        "semi-annual signals (2 Jan & 1 Jul 06:00 UTC)"
     )
 
     yield
