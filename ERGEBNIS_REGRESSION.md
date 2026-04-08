@@ -2231,3 +2231,223 @@ Konsolidierte Ergebnisse aller drei Ansätze zur Look-Ahead-Bias-Untersuchung ü
 | PS90 für Produktion? | ⚠️ **Optional.** PS90 Semi-Annual (+13.1%, 7/11) ist die ehrlichste Konfiguration, opfert aber den Januar-Timing-Vorteil, der ein genuiner struktureller Effekt ist (Turn-of-Year, Tax-Loss-Harvesting-Reversal). |
 
 **Empfehlung:** Semi-Annual mit Lag 0 bleibt die primäre Konfiguration für die Produktions-Pipeline. Für Robustheitsberichte wird Semi-Annual Lag 60 als konservative Obergrenze und PS90 Semi-Annual als konservative Untergrenze mitgeführt. Quarterly-Rebalancing wird zugunsten von Semi-Annual aufgegeben — gleiche Selektionsqualität bei halben Kosten und ohne redundante Q2/Q4-Umschichtungen.
+
+---
+
+## Phase 11: CS-Norm + Lag 60 (Re-Validierung mit aktuellem Code)
+
+**Lauf:** `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --leakage-check` (8. April 2026)
+**Laufzeit:** 14'465 Sekunden (~241 Min)
+**Konfiguration:** CS-normalisiertes Quartals-Target, 60-Tage Publication-Lag, Eulerpool PIT-Fundamentals, 40 Features, ~174 Ticker dynamisches Universum.
+
+⚠️ **Leakage-Check abgebrochen:** Die `--leakage-check`-Diagnostik scheiterte mit `AttributeError: 'SpearmanrResult' object has no attribute 'statistic'` (scipy-Versionskonflikt: `.statistic` existiert erst ab scipy ≥1.9, installierte Version verwendet `.correlation`). Die Backtest-Ergebnisse sind vollständig; nur die Inline-Leakage-Diagnostik fehlt.
+
+### Frequenz-Vergleich
+
+|  | Quarterly | Semi-Annual | Annual |
+|---|---|---|---|
+| Beat BM | 9/11 | 10/11 | **11/11** |
+| Ø Long Cum | +33.9% | **+38.3%** | +31.1% |
+| Ø BM Cum | +5.9% | +5.9% | +5.9% |
+| Ø Turnover | 78% | 85% | 100% |
+| Total Costs (bps) | 2'752 | 1'504 | **880** |
+| Ø Sharpe | 0.99 | **1.16** | 0.93 |
+| Ø maxDD | −25.9% | **−22.8%** | −24.0% |
+| IC (mean) | 0.165 | 0.219 | **0.317** |
+| Prec@5 strict | 12.7% | 12.7% | **16.4%** |
+| Prec@5 Q1 | 39.5% | 42.7% | **50.9%** |
+| Ø realer Rang | 73.2 | 69.9 | **62.7** |
+
+**Verdict des Scripts:** Annual — **11/11 Beat-Rate**, erstmals perfekte Trefferquote über alle 11 OOS-Jahre (2015–2025). Semi-Annual ist risikoadjustiert am stärksten (Sharpe 1.16, maxDD −22.8%, +38.3% Ø Long Cum).
+
+### Per-Year Detail: Quarterly
+
+| Jahr | Long Cum | BM Cum | Sharpe | maxDD | IC | P@5 | P@Q1 | Rang | Kosten (bps) | Beat |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2015 | +15.0% | +7.4% | 0.38 | −0.33 | 0.129 | 15% | 30% | 74.9 | 160 | ✓ |
+| 2016 | +29.0% | +10.6% | 1.60 | −0.09 | 0.123 | 10% | 30% | 70.8 | 304 | ✓ |
+| 2017 | +54.3% | +21.0% | 2.43 | −0.13 | 0.163 | 10% | 55% | 53.6 | 224 | ✓ |
+| 2018 | −13.7% | −19.5% | −0.60 | −0.33 | 0.097 | 5% | 20% | 91.2 | 256 | ✓ |
+| 2019 | **+126.2%** | +21.5% | **2.67** | −0.18 | 0.260 | 20% | 50% | 63.3 | 272 | ✓ |
+| 2020 | +35.5% | +4.9% | 1.44 | −0.13 | 0.160 | 15% | 30% | 83.7 | 304 | ✓ |
+| 2021 | +49.2% | +16.6% | 1.38 | −0.25 | 0.195 | 15% | 50% | 62.3 | 256 | ✓ |
+| 2022 | −9.1% | −16.5% | −0.24 | −0.36 | 0.298 | 5% | 45% | 74.5 | 288 | ✓ |
+| 2023 | +1.6% | +2.4% | 0.05 | −0.38 | 0.162 | 10% | 40% | 74.2 | 272 | ✗ |
+| 2024 | +78.8% | +4.7% | 1.64 | −0.31 | 0.151 | 20% | 45% | 77.0 | 224 | ✓ |
+| 2025 | +6.1% | +11.3% | 0.14 | −0.35 | 0.077 | 15% | 40% | 80.2 | 192 | ✗ |
+
+### Per-Year Detail: Semi-Annual
+
+| Jahr | Long Cum | BM Cum | Sharpe | maxDD | IC | P@5 | P@Q1 | Rang | Kosten (bps) | Beat |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2015 | +30.4% | +7.4% | 0.86 | −0.27 | 0.197 | 20% | 30% | 68.3 | 96 | ✓ |
+| 2016 | +26.2% | +10.6% | 1.50 | −0.12 | 0.254 | 10% | 50% | 56.5 | 144 | ✓ |
+| 2017 | **+62.5%** | +21.0% | **2.85** | −0.10 | 0.286 | 10% | 70% | 46.9 | 128 | ✓ |
+| 2018 | −8.7% | −19.5% | −0.40 | −0.30 | 0.137 | 10% | 20% | 76.3 | 160 | ✓ |
+| 2019 | +87.8% | +21.5% | 1.90 | −0.17 | 0.311 | 10% | 60% | 47.6 | 144 | ✓ |
+| 2020 | +60.3% | +4.9% | 2.32 | −0.11 | 0.185 | 20% | 50% | 64.2 | 128 | ✓ |
+| 2021 | +61.4% | +16.6% | 1.67 | −0.23 | 0.264 | 20% | 50% | 64.0 | 128 | ✓ |
+| 2022 | −4.8% | −16.5% | −0.13 | −0.25 | 0.327 | 0% | 50% | 77.3 | 144 | ✓ |
+| 2023 | −23.1% | +2.4% | −0.71 | −0.43 | 0.163 | 0% | 20% | 115.1 | 160 | ✗ |
+| 2024 | **+88.7%** | +4.7% | **2.04** | −0.19 | 0.240 | 30% | 30% | 86.9 | 128 | ✓ |
+| 2025 | +41.1% | +11.3% | 0.83 | −0.35 | 0.043 | 10% | 40% | 66.1 | 144 | ✓ |
+
+### Per-Year Detail: Annual
+
+| Jahr | Long Cum | BM Cum | Sharpe | maxDD | IC | P@5 | P@Q1 | Rang | Kosten (bps) | Beat |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2015 | +32.4% | +7.4% | 0.89 | −0.27 | 0.310 | 20% | 40% | 49.4 | 80 | ✓ |
+| 2016 | +22.5% | +10.6% | 1.18 | −0.09 | 0.392 | 0% | 60% | 50.0 | 80 | ✓ |
+| 2017 | +33.3% | +21.0% | 1.35 | −0.22 | 0.202 | 20% | 60% | 43.6 | 80 | ✓ |
+| 2018 | −14.5% | −19.5% | −0.59 | −0.35 | 0.402 | 0% | 40% | 76.0 | 80 | ✓ |
+| 2019 | +72.5% | +21.5% | 1.57 | −0.20 | 0.504 | 0% | 80% | 24.0 | 80 | ✓ |
+| 2020 | **+72.1%** | +4.9% | **2.48** | −0.11 | 0.324 | 40% | 60% | 32.6 | 80 | ✓ |
+| 2021 | +27.8% | +16.6% | 0.73 | −0.27 | 0.264 | 20% | 40% | 77.4 | 80 | ✓ |
+| 2022 | +10.9% | −16.5% | 0.48 | −0.25 | 0.530 | 20% | 80% | 26.4 | 80 | ✓ |
+| 2023 | +16.6% | +2.4% | 0.61 | −0.26 | 0.221 | 20% | 20% | 123.5 | 80 | ✓ |
+| 2024 | +48.4% | +4.7% | 1.08 | −0.27 | 0.340 | 40% | 40% | 85.0 | 80 | ✓ |
+| 2025 | +20.3% | +11.3% | 0.47 | −0.35 | −0.006 | 0% | 40% | 101.4 | 80 | ✓ |
+
+### Turnover-Detail: Quarterly
+
+| Jahr | Q | Cutoff | Pos. | Swaps | Turnover | Kosten (bps) | Q-Return |
+|------|---|--------|------|-------|----------|--------------|----------|
+| 2015 | Q1 | 2014-12-31 | 5 | 5 | 100% | 40 | +58.6% |
+| 2015 | Q2 | 2015-03-31 | 5 | 0 | 0% | 0 | −22.0% |
+| 2015 | Q3 | 2015-06-30 | 5 | 1 | 20% | 16 | −2.3% |
+| 2015 | Q4 | 2015-09-30 | 5 | 4 | 80% | 104 | −4.8% |
+| 2016 | Q1 | 2015-12-31 | 5 | 5 | 100% | 40 | +10.2% |
+| 2016 | Q2 | 2016-03-31 | 5 | 5 | 100% | 80 | +7.0% |
+| 2016 | Q3 | 2016-06-30 | 5 | 4 | 80% | 64 | +8.0% |
+| 2016 | Q4 | 2016-09-30 | 5 | 5 | 100% | 120 | +1.3% |
+| 2017 | Q1 | 2016-12-31 | 5 | 5 | 100% | 40 | +36.4% |
+| 2017 | Q2 | 2017-03-31 | 5 | 2 | 40% | 32 | −0.1% |
+| 2017 | Q3 | 2017-06-30 | 5 | 3 | 60% | 48 | +6.5% |
+| 2017 | Q4 | 2017-09-30 | 5 | 4 | 80% | 104 | +6.2% |
+| 2018 | Q1 | 2017-12-31 | 5 | 5 | 100% | 40 | +21.5% |
+| 2018 | Q2 | 2018-03-31 | 5 | 4 | 80% | 64 | −9.7% |
+| 2018 | Q3 | 2018-06-30 | 5 | 2 | 40% | 32 | −1.0% |
+| 2018 | Q4 | 2018-09-30 | 5 | 5 | 100% | 120 | −20.6% |
+| 2019 | Q1 | 2018-12-31 | 5 | 5 | 100% | 40 | +81.8% |
+| 2019 | Q2 | 2019-03-31 | 5 | 5 | 100% | 80 | +32.1% |
+| 2019 | Q3 | 2019-06-30 | 5 | 3 | 60% | 48 | −6.7% |
+| 2019 | Q4 | 2019-09-30 | 5 | 4 | 80% | 104 | +1.1% |
+| 2020 | Q1 | 2019-12-31 | 5 | 5 | 100% | 40 | +20.5% |
+| 2020 | Q2 | 2020-03-31 | 5 | 5 | 100% | 80 | +3.6% |
+| 2020 | Q3 | 2020-06-30 | 5 | 4 | 80% | 64 | −2.6% |
+| 2020 | Q4 | 2020-09-30 | 5 | 5 | 100% | 120 | +11.5% |
+| 2021 | Q1 | 2020-12-31 | 5 | 5 | 100% | 40 | +54.2% |
+| 2021 | Q2 | 2021-03-31 | 5 | 3 | 60% | 48 | −12.7% |
+| 2021 | Q3 | 2021-06-30 | 5 | 3 | 60% | 48 | +18.5% |
+| 2021 | Q4 | 2021-09-30 | 5 | 5 | 100% | 120 | −6.5% |
+| 2022 | Q1 | 2021-12-31 | 5 | 5 | 100% | 40 | +19.2% |
+| 2022 | Q2 | 2022-03-31 | 5 | 5 | 100% | 80 | −27.1% |
+| 2022 | Q3 | 2022-06-30 | 5 | 5 | 100% | 80 | −5.6% |
+| 2022 | Q4 | 2022-09-30 | 5 | 3 | 60% | 88 | +10.8% |
+| 2023 | Q1 | 2022-12-31 | 5 | 5 | 100% | 40 | +11.8% |
+| 2023 | Q2 | 2023-03-31 | 5 | 4 | 80% | 64 | +5.0% |
+| 2023 | Q3 | 2023-06-30 | 5 | 3 | 60% | 48 | −24.9% |
+| 2023 | Q4 | 2023-09-30 | 5 | 5 | 100% | 120 | +15.3% |
+| 2024 | Q1 | 2023-12-31 | 5 | 5 | 100% | 40 | +57.8% |
+| 2024 | Q2 | 2024-03-31 | 5 | 2 | 40% | 32 | +4.1% |
+| 2024 | Q3 | 2024-06-30 | 5 | 3 | 60% | 48 | +1.3% |
+| 2024 | Q4 | 2024-09-30 | 5 | 4 | 80% | 104 | +7.4% |
+| 2025 | Q1 | 2024-12-31 | 5 | 5 | 100% | 40 | −20.0% |
+| 2025 | Q2 | 2025-03-31 | 5 | 2 | 40% | 32 | +14.9% |
+| 2025 | Q3 | 2025-06-30 | 5 | 4 | 80% | 64 | +29.7% |
+| 2025 | Q4 | 2025-09-30 | 5 | 1 | 20% | 56 | −11.0% |
+
+Ø Turnover pro Quartal: 78% — deutlich höher als in früheren Phasen (Phase 7: 33%). Die Lag-60-Fundamentals führen zu grösserer Instabilität in der Rangliste zwischen Quartalen.
+
+### Vergleich: Phase 10 (alter Lag 60) vs Phase 11 (neuer Lag 60)
+
+Die Ergebnisse weichen von den in Phase 10 dokumentierten Lag-60-Zahlen ab, da zwischenzeitlich Code-Änderungen (Feature-Engineering, Gewichtungs-/Hysterese-Logik) stattfanden.
+
+| Metrik | Phase 10 Quarterly | Phase 11 Quarterly | Phase 10 Semi-Annual | Phase 11 Semi-Annual | Phase 10 Annual | Phase 11 Annual |
+|---|---|---|---|---|---|---|
+| Beat BM | 9/11 | 9/11 | 10/11 | 10/11 | 10/11 | **11/11** |
+| Ø Long Cum | +27.7% | **+33.9%** | +31.1% | **+38.3%** | +30.8% | **+31.1%** |
+| Ø Sharpe | 0.89 | **0.99** | 1.00 | **1.16** | **1.03** | 0.93 |
+| IC (mean) | 0.171 | 0.165 | **0.224** | 0.219 | 0.294 | **0.317** |
+| Total Costs | 2'672 | 2'752 | 1'504 | 1'504 | 880 | 880 |
+
+Alle Frequenzen verbessern sich in Ø Long Cum (+0.3 bis +7.2pp). Annual gewinnt ein zusätzliches Beat-Jahr (10→11/11, 2017 kippt von ✗ auf ✓: −2.8% → +33.3%).
+
+### Vergleich: Lag 0 (Phase 9A-PIT) vs Lag 60 (Phase 11)
+
+| Metrik | Lag 0 Quarterly | Lag 60 Quarterly | Lag 0 Semi-Annual | Lag 60 Semi-Annual | Lag 0 Annual | Lag 60 Annual |
+|---|---|---|---|---|---|---|
+| Beat BM | 9/11 | 9/11 | 9/11 | **10/11** | 10/11 | **11/11** |
+| Ø Long Cum | **+41.0%** | +33.9% | **+40.5%** | +38.3% | **+36.0%** | +31.1% |
+| Ø Sharpe | **1.25** | 0.99 | **1.28** | 1.16 | **1.11** | 0.93 |
+| IC (mean) | 0.168 | 0.165 | 0.224 | 0.219 | **0.330** | 0.317 |
+| Prec@5 Q1 | 40.9% | 39.5% | 41.8% | 42.7% | 47.3% | **50.9%** |
+| Ø real Rang | 72.3 | 73.2 | 68.1 | 69.9 | 63.1 | **62.7** |
+
+**Lag-60-Effekt auf absolute Returns (Δ Lag 0 → Lag 60):**
+- Quarterly: −7.1pp (vorher Phase 10: −13.3pp — Rückgang halbiert)
+- Semi-Annual: −2.2pp (vorher: −9.4pp — fast kein Unterschied mehr)
+- Annual: −4.9pp (vorher: −5.2pp — stabil)
+
+**Lag-60-Effekt auf Beat-Rate:**
+- Quarterly: 9/11 → 9/11 (neutral)
+- Semi-Annual: 9/11 → **10/11** (+1, 2021 kippt von ✗ auf ✓)
+- Annual: 10/11 → **11/11** (+1, 2017 kippt)
+
+### Kernerkenntnisse
+
+1. **Annual 11/11 — perfekte Beat-Rate:** Erstmals schlägt die Strategie den Equal-Weight-Benchmark in allen 11 OOS-Jahren (2015–2025). Selbst 2018 (−14.5% vs −19.5%) und 2025 (+20.3% vs +11.3%) liefern positives Alpha. Der Lag 60 schützt vor aggressiven Picks auf Basis noch nicht publizierter Q4-Berichte.
+
+2. **Semi-Annual als bester Kompromiss:** Sharpe 1.16 (höchste aller Konfigurationen), maxDD −22.8% (niedrigster), Ø Long Cum +38.3% (höchster), bei nur 1'504 bps Kosten über 11 Jahre. Die einzige Schwachstelle ist 2023 (−23.1%).
+
+3. **Lag-60-Penalty deutlich reduziert:** In Phase 10 kostete der Lag 60 noch −13.3pp (quarterly) und −9.4pp (semi-annual). Jetzt nur noch −7.1pp bzw. −2.2pp. Die Code-Änderungen haben die Pipeline robuster gegenüber älteren Fundamentals gemacht.
+
+4. **2022 endgültig gelöst (Annual):** +10.9% vs BM −16.5% = +27.4pp Alpha im Bärenjahr. IC 0.530 und 80% der Picks im Top-Quartil — die stärkste Ranking-Qualität aller 11 Jahre.
+
+5. **2023 bleibt die Schwachstelle:** Quarterly knapp über Null (+1.6%, ✗), Semi-Annual −23.1% (✗). Nur Annual rettet dieses Jahr (+16.6%, ✓). Die niedrige IC (0.162–0.221) deutet auf ein strukturelles Problem hin — möglicherweise die Seitwärtsbewegung mit hoher Dispersion.
+
+6. **2025 schwächelt bei Quarterly:** +6.1% vs +11.3% BM (✗). Die Q1-Picks (−20.0%) belasten, die Q3-Picks (+29.7%) kompensieren teilweise. Annual (+20.3%) und Semi-Annual (+41.1%) schlagen den BM.
+
+### Aktualisierte Gesamtempfehlung
+
+| Konfiguration | Beat | Ø Long | Sharpe | Kosten | Empfehlung |
+|---|---|---|---|---|---|
+| **Annual Lag 60** | **11/11** | +31.1% | 0.93 | 880 | ✅ **Maximal konservativ** — perfekte Beat-Rate |
+| **Semi-Annual Lag 60** | 10/11 | **+38.3%** | **1.16** | 1'504 | ✅ **Risikoadjustiert optimal** |
+| Semi-Annual Lag 0 | 9/11 | +40.5% | 1.28 | 1'488 | ⚠️ Höchste Returns, aber leichter Look-Ahead |
+| Quarterly Lag 60 | 9/11 | +33.9% | 0.99 | 2'752 | ⚠️ Hohe Kosten ohne proportionalen Vorteil |
+
+**Neue primäre Empfehlung:** Semi-Annual Lag 60 als Default für die Produktions-Pipeline (10/11, Sharpe 1.16, +38.3%). Annual Lag 60 als konservative Alternative für Investoren, die maximale Beat-Konsistenz priorisieren (11/11).
+
+### Leakage-Diagnostik (Phase 11)
+
+**CLI:** `python regression_leakage_test.py --cs-norm --pub-lag 60`
+**Panel:** 6'822 Samples × 40 Features, 51 Quartale
+**Laufzeit:** 426 Sekunden (~7 Min)
+
+| Test | Status | Kernmetrik | Schwellenwert |
+|---|---|---|---|
+| EMBARGO | ✅ PASS | IC std: 0.0471 (42 folds), IC embargo: 0.0496 (41 folds), Δ = −0.0024 | Δ < 0.10 |
+| SHUFFLED_LABELS | ✅ PASS | IC real: 0.1227, mean \|IC\| shuffled: 0.0241 (10×) | shuffled < 0.05 |
+| RETRODICTION | ✅ PASS | IC fwd: 0.1006, IC bwd: 0.0720, Δ = +0.0286 | Δ ≥ −0.05 |
+| FEATURE_FUTURE_CORR | ✅ PASS | Mean gap: 0.0022 (40 Features), 0 verdächtig | gap < 0.03 |
+
+**Ergebnis: 4/4 bestanden.** Die CS-Norm + Lag-60-Pipeline ist leakage-frei:
+
+- **Embargo (✅):** IC mit 1Q-Lücke (0.0496) sogar minimal besser als ohne (0.0471). Keine zeitliche Kontamination zwischen Nachbar-Quartalen.
+- **Shuffled Labels (✅):** Realer IC (0.1227) ist 5× höher als Shuffled-IC (0.0241). Das Signal ist genuin aktienspezifisch — kein Artefakt von Macro-Features oder Quartalsstruktur. Im Vergleich zur Phase 9A ohne Lag (shuffled 0.0207) bleibt die Baseline niedrig.
+- **Retrodiction (✅):** Forward-IC (0.1006) > Backward-IC (0.0720) — das Modell generalisiert vorwärts besser als rückwärts. Keine Zukunftsinformation in den Features.
+- **Feature-Future-Korrelation (✅):** Mean Gap 0.0022, 0 verdächtige Features. Top-5 Gaps: `hvol_60d` (+0.0081), `atr_14_pct` (+0.0080), `max_drawdown_60d` (+0.0078), `spread_proxy` (+0.0076), `gross_margin` (+0.0073) — alle weit unter der 0.05-Schwelle.
+
+**Vergleich mit Phase 9A-PIT Leakage-Test (ohne Lag):**
+
+| Metrik | Phase 9A (Lag 0) | Phase 11 (Lag 60) | Interpretation |
+|---|---|---|---|
+| Embargo IC std | 0.0745 | 0.0471 | Lag 60 hat schwächeres aber sauberes Signal |
+| Embargo IC embargo | 0.0909 | 0.0496 | Beide: Embargo-IC ≥ Standard (kein Leakage) |
+| IC real | 0.1111 | 0.1227 | Lag 60 leicht höher — ältere Fundamentals weniger verrauscht |
+| Shuffled |IC| | 0.0207 | 0.0241 | Beide weit unter 0.05 |
+| Retrodiction Δ | +0.009 | +0.029 | Lag 60 deutlich positiver — stärkere Forward-Generalisierung |
+| Feature-Future Gap | 0.0008 | 0.0022 | Beide nahe Null |
+
+Der Lag 60 verbessert die Retrodiction-Differenz (+0.029 vs +0.009) — die zeitlich verschobenen Fundamentals erzeugen ein Signal, das stärker in die Zukunft als in die Vergangenheit generalisiert. Dies ist konsistent mit der Hypothese, dass der Lag Look-Ahead-Bias in den PIT-Fundamentals weiter reduziert.

@@ -11,7 +11,7 @@ leakage (temporal, imputation, or feature contamination):
    than with past returns.
 
 Usage:
-    python regression_leakage_test.py [--cs-norm]
+    python regression_leakage_test.py [--cs-norm] [--pub-lag N]
 """
 from __future__ import annotations
 
@@ -376,9 +376,25 @@ def print_report(results: list[dict[str, Any]], *, cs_norm: bool = False) -> str
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
+def _pub_lag_days_from_argv(argv: list[str]) -> int:
+    for i, a in enumerate(argv):
+        if a.startswith("--pub-lag="):
+            try:
+                return max(0, int(a.split("=", 1)[1].strip()))
+            except ValueError:
+                return 0
+        if a == "--pub-lag" and i + 1 < len(argv):
+            try:
+                return max(0, int(argv[i + 1].strip()))
+            except ValueError:
+                return 0
+    return 0
+
+
 def main() -> None:
     t0 = time.time()
     cs_norm = "--cs-norm" in sys.argv
+    pub_lag = _pub_lag_days_from_argv(sys.argv)
     log.info("Loading data …")
     ohlcv, fundamentals, eulerpool_q, eulerpool_prof = load_data()
 
@@ -388,7 +404,10 @@ def main() -> None:
         log.error("No forward returns — aborting.")
         return
 
-    log.info("Building feature panel (cs_normalize=%s) …", cs_norm)
+    log.info(
+        "Building feature panel (cs_normalize=%s, pub_lag=%d) …",
+        cs_norm, pub_lag,
+    )
     X, y, period_labels = build_regression_feature_panel(
         ohlcv,
         fundamentals,
@@ -396,6 +415,7 @@ def main() -> None:
         cs_normalize=cs_norm,
         eulerpool_quarterly=eulerpool_q,
         eulerpool_profiles=eulerpool_prof,
+        publication_lag_days=pub_lag,
         min_daily_volume_chf=config.MIN_DAILY_VOLUME_CHF,
     )
 
@@ -425,7 +445,14 @@ def main() -> None:
     log.info("Test 4/4: Feature-future correlation …")
     results.append(feature_future_correlation_test(X, y, period_labels))
 
+    suffix_label = ""
+    if cs_norm:
+        suffix_label += " CS-NORM"
+    if pub_lag > 0:
+        suffix_label += f" LAG-{pub_lag}"
     report = print_report(results, cs_norm=cs_norm)
+    if pub_lag > 0:
+        log.info("Publication lag: %d days applied to PIT fundamentals", pub_lag)
 
     elapsed = time.time() - t0
     log.info("Total runtime: %.0f seconds", elapsed)
