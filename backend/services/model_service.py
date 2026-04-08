@@ -400,7 +400,23 @@ class ModelService:
                 cutoff_date,
             )
 
-        pred_score = pred.reindex(selected) - pred.reindex(selected).min() + 1e-12
+        if n_actual == 0:
+            logger.error(
+                "No valid predictions at cutoff %s — returning empty portfolio.",
+                cutoff_date,
+            )
+            regime_state = detect_regime(smi_ohlcv, cutoff_date)
+            return SignalResult(
+                cutoff_date=cutoff_date,
+                regime_label=regime_state.label.value,
+                regime_confidence=round(regime_state.confidence, 4),
+                portfolio=[],
+                portfolio_json=serialize_portfolio_bundle([], top_n),
+                requested_top_n=top_n,
+            )
+
+        pred_sel = pred.reindex(selected)
+        pred_score = pred_sel - pred_sel.min() + 1e-12
         weights = pred_score / pred_score.sum()
 
         if max_weight < 1.0:
@@ -757,6 +773,13 @@ class ModelService:
                 top_n,
                 _DEFAULT_HYSTERESIS_BUFFER,
             )
+
+            if not new_portfolio:
+                logger.warning(
+                    "No tradeable tickers for period %s–%s, skipping.",
+                    period.period_start, period.period_end,
+                )
+                continue
 
             pred_sel = pred.reindex(new_portfolio)
             pred_score = pred_sel - pred_sel.min() + 1e-12
