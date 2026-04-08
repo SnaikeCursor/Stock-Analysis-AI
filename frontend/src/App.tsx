@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout'
 import { AlertsPage } from '@/pages/Alerts'
 import { DashboardPage } from '@/pages/Dashboard'
 import { HistoryPage } from '@/pages/History'
+import { PortfolioPage } from '@/pages/Portfolio'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,13 +17,18 @@ const queryClient = new QueryClient({
   },
 })
 
+/** Match Vite `base` (GitHub project pages use e.g. `/repo-name/`). */
+const routerBasename =
+  import.meta.env.BASE_URL === '/' ? undefined : import.meta.env.BASE_URL.replace(/\/$/, '')
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename}>
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<DashboardPage />} />
+            <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="alerts" element={<AlertsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,6 +5,10 @@ Tables:
   - portfolio_positions  — per-ticker entries linked to a signal (shares, P&L)
   - rebalance_proposals  — swap instructions when moving from old to new signal
   - alerts               — rebalancing reminders, regime changes, new signals
+  - user_profiles        — anonymous UUID identities (X-User-ID)
+  - user_portfolios      — cash balance per user profile
+  - user_positions       — manual portfolio positions (open/closed)
+  - cash_transactions    — audit log for cash movements
 """
 
 from __future__ import annotations
@@ -191,6 +195,100 @@ class RebalanceProposal(Base):
             f"<RebalanceProposal id={self.id} old={self.old_signal_id} "
             f"new={self.new_signal_id} status={self.status}>"
         )
+
+
+class UserProfile(Base):
+    """Anonymous user identified by a client-generated UUID (header X-User-ID)."""
+
+    __tablename__ = "user_profiles"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    uuid: str = Column(String(36), unique=True, nullable=False, index=True)
+    display_name: str | None = Column(String(100), nullable=True)
+    created_at: datetime = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    portfolio = relationship(
+        "UserPortfolio",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class UserPortfolio(Base):
+    """One cash book per user profile."""
+
+    __tablename__ = "user_portfolios"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    user_id: int = Column(Integer, ForeignKey("user_profiles.id"), unique=True, nullable=False)
+    cash_balance: float = Column(Float, nullable=False, default=0.0)
+    created_at: datetime = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    user = relationship("UserProfile", back_populates="portfolio")
+    positions = relationship(
+        "UserPosition",
+        back_populates="portfolio",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    cash_transactions = relationship(
+        "CashTransaction",
+        back_populates="portfolio",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class UserPosition(Base):
+    """Manual long position tracked in CHF with Swissquote-style fees."""
+
+    __tablename__ = "user_positions"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id: int = Column(Integer, ForeignKey("user_portfolios.id"), nullable=False, index=True)
+    ticker: str = Column(String(20), nullable=False)
+    shares: int = Column(Integer, nullable=False)
+    entry_price: float = Column(Float, nullable=False)
+    entry_date: str = Column(String(10), nullable=False)
+    entry_total: float = Column(Float, nullable=False)
+    entry_fee: float = Column(Float, nullable=False, default=0.0)
+    exit_price: float | None = Column(Float, nullable=True)
+    exit_date: str | None = Column(String(10), nullable=True)
+    exit_total: float | None = Column(Float, nullable=True)
+    exit_fee: float | None = Column(Float, nullable=True)
+    pnl_abs: float | None = Column(Float, nullable=True)
+    pnl_pct: float | None = Column(Float, nullable=True)
+    status: str = Column(String(10), nullable=False, default="open")
+
+    portfolio = relationship("UserPortfolio", back_populates="positions")
+
+
+class CashTransaction(Base):
+    """Audit trail for portfolio cash movements."""
+
+    __tablename__ = "cash_transactions"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id: int = Column(Integer, ForeignKey("user_portfolios.id"), nullable=False, index=True)
+    amount: float = Column(Float, nullable=False)
+    tx_type: str = Column(String(32), nullable=False)
+    description: str | None = Column(Text, nullable=True)
+    created_at: datetime = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    portfolio = relationship("UserPortfolio", back_populates="cash_transactions")
 
 
 # ------------------------------------------------------------------

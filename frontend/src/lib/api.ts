@@ -5,6 +5,46 @@
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? 'http://localhost:8000'
 
+/** localStorage key for anonymous portfolio identity (UUID v4). */
+export const PORTFOLIO_USER_ID_KEY = 'portfolio_user_id'
+
+let _portfolioUserIdMemory: string | null = null
+
+/** Return or create a persistent UUID for `X-User-ID` (manual portfolio). */
+export function getPortfolioUserId(): string {
+  try {
+    let id = localStorage.getItem(PORTFOLIO_USER_ID_KEY)
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem(PORTFOLIO_USER_ID_KEY, id)
+    }
+    return id
+  } catch {
+    if (!_portfolioUserIdMemory) _portfolioUserIdMemory = crypto.randomUUID()
+    return _portfolioUserIdMemory
+  }
+}
+
+/** Set portfolio identity from a full UUID string (e.g. another device). Returns false if invalid. */
+export function setPortfolioUserId(uuid: string): boolean {
+  const s = uuid.trim()
+  const re =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (!re.test(s)) return false
+  try {
+    localStorage.setItem(PORTFOLIO_USER_ID_KEY, s.toLowerCase())
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Short display code (first segment of UUID, 8 hex chars). */
+export function getPortfolioDisplayCode(): string {
+  const id = getPortfolioUserId()
+  return id.split('-')[0] ?? id.slice(0, 8)
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -28,6 +68,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: {
       Accept: 'application/json',
       ...init?.headers,
+      'X-User-ID': getPortfolioUserId(),
     },
   })
 
@@ -342,6 +383,63 @@ export type PortfolioHistorySignal = {
   positions: PositionDetail[]
 }
 
+/** Manual user portfolio (`/api/me/portfolio`) — open position row with live marks. */
+export type MyOpenPosition = {
+  id: number
+  ticker: string
+  shares: number
+  entry_price: number
+  entry_date: string
+  entry_total: number
+  entry_fee: number
+  current_price: number | null
+  current_value: number | null
+  pnl_pct: number | null
+  pnl_abs: number | null
+  status: string
+}
+
+export type MyClosedPosition = {
+  id: number
+  ticker: string
+  shares: number
+  entry_price: number
+  entry_date: string
+  entry_total: number
+  entry_fee: number
+  exit_price: number | null
+  exit_date: string | null
+  exit_total: number | null
+  exit_fee: number | null
+  pnl_abs: number | null
+  pnl_pct: number | null
+  status: string
+}
+
+export type MyPortfolioOverview = {
+  user_uuid: string
+  cash_balance: number
+  open_positions: MyOpenPosition[]
+  closed_positions: MyClosedPosition[]
+}
+
+export type MyPortfolioSummary = {
+  cash_balance: number
+  total_portfolio_value: number
+  unrealized_pnl: number
+  realized_pnl: number
+  total_fees_paid: number
+  open_notional_at_cost: number
+  open_market_value: number
+  n_open: number
+  n_closed: number
+}
+
+export type SwissquoteFeeEstimate = {
+  volume_chf: number
+  fee_chf: number
+}
+
 // --- API ---
 
 export const api = {
@@ -422,6 +520,37 @@ export const api = {
 
   markAlertRead: (alertId: number) =>
     request<AlertOut>(`/api/alerts/${alertId}/read`, { method: 'PUT' }),
+
+  /** Anonymous manual portfolio (requires `X-User-ID` — sent automatically). */
+  getMyPortfolio: () => request<MyPortfolioOverview>('/api/me/portfolio'),
+
+  getMyPortfolioSummary: () => request<MyPortfolioSummary>('/api/me/portfolio/summary'),
+
+  depositMyPortfolio: (body: { amount: number }) =>
+    request<{ cash_balance: number }>(
+      '/api/me/portfolio/deposit',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
+    ),
+
+  addMyPosition: (body: { ticker: string; shares: number; entry_price: number; entry_date: string }) =>
+    request<Record<string, unknown>>(
+      '/api/me/portfolio/positions',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
+    ),
+
+  closeMyPosition: (positionId: number, body: { exit_price: number; exit_date?: string | null }) =>
+    request<Record<string, unknown>>(
+      `/api/me/portfolio/positions/${positionId}/close`,
+      withJson({ method: 'PUT', body: JSON.stringify(body) }),
+    ),
+
+  deleteMyPosition: (positionId: number) =>
+    request<void>(`/api/me/portfolio/positions/${positionId}`, { method: 'DELETE' }),
+
+  getSwissquoteFeeEstimate: (volumeChf: number) =>
+    request<SwissquoteFeeEstimate>(
+      `/api/me/swissquote-fee?${new URLSearchParams({ volume_chf: String(volumeChf) })}`,
+    ),
 }
 
 export function getApiBaseUrl(): string {

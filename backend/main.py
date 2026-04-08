@@ -23,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.models.db import init_db
-from backend.routers import alerts, dashboard, history, portfolio, signals
+from backend.routers import alerts, dashboard, history, portfolio, signals, user_portfolio
 from backend.services.data_service import DataService
 from backend.services.model_service import ModelService
 from backend.services.portfolio_service import PortfolioService
@@ -118,6 +118,7 @@ app.include_router(dashboard.router)
 app.include_router(signals.router)
 app.include_router(history.router)
 app.include_router(portfolio.router)
+app.include_router(user_portfolio.router)
 app.include_router(alerts.router)
 
 
