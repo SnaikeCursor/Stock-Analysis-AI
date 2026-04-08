@@ -296,8 +296,9 @@ class ModelService:
         """Load per-year walk-forward regression models for backtesting.
 
         Each OOS year gets the model that was trained only on data prior
-        to that year, preventing look-ahead bias.  Falls back to the
-        latest available model for years without a dedicated cache file.
+        to that year, preventing look-ahead bias.  When a year-specific
+        cache file is missing, the nearest *prior* year's model is used
+        so that no future data leaks into the evaluation.
         """
         import joblib
 
@@ -308,25 +309,47 @@ class ModelService:
                 "Run `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` to train."
             )
 
+        available: dict[int, tuple[Path, RegressionTrainResult]] = {}
+        for suffix in _MODEL_SUFFIXES:
+            for f in cache_dir.glob(f"regression_wf_*{suffix}.joblib"):
+                stem = f.stem
+                prefix = "regression_wf_"
+                if not stem.startswith(prefix) or not stem.endswith(suffix):
+                    continue
+                year_str = stem[len(prefix):-len(suffix)]
+                try:
+                    year = int(year_str)
+                except ValueError:
+                    continue
+                if year not in available:
+                    result = self._deserialize_regression_result(joblib.load(f))
+                    available[year] = (f, result)
+
         models: dict[int, RegressionTrainResult] = {}
         for yr in oos_years:
-            loaded = False
-            for suffix in _MODEL_SUFFIXES:
-                path = cache_dir / f"regression_wf_{yr}{suffix}.joblib"
-                if path.exists():
-                    result = self._deserialize_regression_result(joblib.load(path))
-                    models[yr] = result
-                    loaded = True
-                    logger.debug(
-                        "Walk-forward model for OOS %d loaded from %s", yr, path,
-                    )
-                    break
-            if not loaded:
-                logger.warning(
-                    "No walk-forward model for OOS year %d — falling back to latest model",
-                    yr,
+            if yr in available:
+                path, result = available[yr]
+                models[yr] = result
+                logger.debug(
+                    "Walk-forward model for OOS %d loaded from %s", yr, path,
                 )
-                models[yr] = self.load_model()
+            else:
+                prior_years = sorted(y for y in available if y < yr)
+                if not prior_years:
+                    raise FileNotFoundError(
+                        f"No walk-forward model for OOS year {yr} and no prior year's "
+                        f"model available in {cache_dir}. Run "
+                        "`python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` "
+                        "to train all required models."
+                    )
+                fallback_yr = prior_years[-1]
+                _, result = available[fallback_yr]
+                models[yr] = result
+                logger.warning(
+                    "No walk-forward model for OOS year %d — using prior year %d model "
+                    "to preserve walk-forward integrity",
+                    yr, fallback_yr,
+                )
 
         logger.info(
             "Loaded %d walk-forward models for years %s",
