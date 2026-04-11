@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Stock Analysis AI</title>
+    <script>
+      // SPA redirect for GitHub Pages: preserve path + query + hash so
+      // react-router can handle it after index.html loads.
+      var base = '/Stock-Analysis-AI/'
+      var path = location.pathname
+      if (path.startsWith(base)) path = '/' + path.slice(base.length)
+      var url = base + '?p=' + encodeURIComponent(path + location.search) + location.hash
+      location.replace(url)
+    </script>
+  </head>
+  <body></body>
+</html>

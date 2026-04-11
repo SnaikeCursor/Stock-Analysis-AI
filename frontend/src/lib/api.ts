@@ -3,7 +3,14 @@
  * Set `VITE_API_BASE_URL` (e.g. `http://localhost:8000`) in `.env` for local dev.
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? 'http://localhost:8000'
+function normalizeApiBase(raw: string | undefined): string {
+  const s = raw?.trim().replace(/\/$/, '')
+  if (!s) return 'http://localhost:8000'
+  if (/^https?:\/\//.test(s)) return s
+  return `https://${s}`
+}
+
+const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL as string | undefined)
 
 /** localStorage key for anonymous portfolio identity (UUID v4). */
 export const PORTFOLIO_USER_ID_KEY = 'portfolio_user_id'
