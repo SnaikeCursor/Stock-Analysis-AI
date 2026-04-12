@@ -68,6 +68,37 @@ function fmtPct(v: number, d = 1) {
   return `${(v * 100).toFixed(d)}%`
 }
 
+/** Display basis points as a percent of notional (40 bps → 0.40%). */
+function bpsToPctStr(bps: number, decimals = 2) {
+  return `${(bps / 100).toFixed(decimals)}%`
+}
+
+function rebalanceDetailCopy(data: QuarterlyDetail[]): { title: string; description: string } {
+  const labels = [...new Set(data.map((d) => d.quarter))]
+  if (labels.some((l) => l.startsWith('H'))) {
+    return {
+      title: 'Semi-Annual Detail',
+      description: 'Per half-year returns (hover for turnover, costs, and Sharpe)',
+    }
+  }
+  if (labels.some((l) => l.startsWith('Q'))) {
+    return {
+      title: 'Quarterly Detail',
+      description: 'Per-quarter returns (hover for turnover, costs, and Sharpe)',
+    }
+  }
+  if (labels.includes('FY')) {
+    return {
+      title: 'Annual Detail',
+      description: 'Full-year periods (hover for turnover, costs, and Sharpe)',
+    }
+  }
+  return {
+    title: 'Rebalance Period Detail',
+    description: 'Per-period returns (hover for turnover, costs, and Sharpe)',
+  }
+}
+
 function heatCellBg(pct: number): string {
   const intensity = Math.min(Math.abs(pct) / 15, 1)
   const chroma = intensity * 0.14
@@ -298,7 +329,7 @@ function CumulativeReturnChart({ data }: { data: HistoryPerformanceResponse }) {
 // ---------------------------------------------------------------------------
 
 function QuarterlyHeatmap({ data }: { data: QuarterlyDetail[] }) {
-  const { years, quarters, grid } = useMemo(() => {
+  const { years, quarters, grid, header } = useMemo(() => {
     const ySet = new Set<number>()
     const qSet = new Set<string>()
     const g = new Map<string, QuarterlyDetail>()
@@ -309,10 +340,12 @@ function QuarterlyHeatmap({ data }: { data: QuarterlyDetail[] }) {
       g.set(`${d.year}-${d.quarter}`, d)
     }
 
+    const detailData = [...g.values()]
     return {
       years: [...ySet].sort((a, b) => a - b),
       quarters: [...qSet].sort(),
       grid: g,
+      header: rebalanceDetailCopy(detailData),
     }
   }, [data])
 
@@ -323,11 +356,9 @@ function QuarterlyHeatmap({ data }: { data: QuarterlyDetail[] }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CalendarRange className="size-4 opacity-70" />
-          Quarterly Detail
+          {header.title}
         </CardTitle>
-        <CardDescription>
-          Per-quarter returns (hover for turnover, costs &amp; Sharpe)
-        </CardDescription>
+        <CardDescription>{header.description}</CardDescription>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -373,7 +404,7 @@ function QuarterlyHeatmap({ data }: { data: QuarterlyDetail[] }) {
                           title={[
                             `Return: ${pct.toFixed(2)}%`,
                             `Turnover: ${d.turnover_pct.toFixed(1)}%`,
-                            `Cost: ${d.cost_bps.toFixed(1)} bps`,
+                            `Cost: ${bpsToPctStr(d.cost_bps, 2)}`,
                             `Sharpe: ${d.sharpe.toFixed(2)}`,
                             `Max DD: ${(d.max_dd * 100).toFixed(1)}%`,
                             `Positions: ${d.n_positions}`,
@@ -564,9 +595,9 @@ function HistoryContent({
         />
         <KpiCard
           title="Total Costs"
-          value={`${summary.totalCostsBps.toFixed(0)} bps`}
-          subtitle={`~${(summary.totalCostsBps / Math.max(summary.n, 1)).toFixed(1)} bps / year`}
-          icon={RefreshCw}
+          value={bpsToPctStr(summary.totalCostsBps, 2)}
+          subtitle={`~${bpsToPctStr(summary.totalCostsBps / Math.max(summary.n, 1), 2)} per year`}
+          icon={DollarSign}
         />
       </div>
 
@@ -800,7 +831,7 @@ function SimulatorKpis({ summary }: { summary: SimulateSummary }) {
         title="Total Costs"
         value={`CHF ${fmtChf(summary.total_costs)}`}
         subtitle={`${summary.n_trades} trades`}
-        icon={RefreshCw}
+        icon={DollarSign}
       />
     </div>
   )
@@ -982,7 +1013,8 @@ function SimulatorResults({ data }: { data: SimulateResponse }) {
 function BacktestSimulator() {
   const [startYear, setStartYear] = useState(2015)
   const [capital, setCapital] = useState(100_000)
-  const [costsBps, setCostsBps] = useState(40)
+  /** One-way cost as % of notional (0.4 = 0.40% = 40 bps). */
+  const [costsPct, setCostsPct] = useState(0.4)
 
   const mutation = useMutation({
     mutationFn: (body: { start_date: string; initial_capital: number; costs_bps: number }) =>
@@ -993,7 +1025,7 @@ function BacktestSimulator() {
     mutation.mutate({
       start_date: `${startYear}-01-01`,
       initial_capital: capital,
-      costs_bps: costsBps,
+      costs_bps: costsPct * 100,
     })
   }
 
@@ -1038,14 +1070,14 @@ function BacktestSimulator() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Costs (bps)</label>
+              <label className="text-xs font-medium text-muted-foreground">Costs (% one-way)</label>
               <input
                 type="number"
-                value={costsBps}
-                onChange={(e) => setCostsBps(Number(e.target.value))}
+                value={costsPct}
+                onChange={(e) => setCostsPct(Number(e.target.value))}
                 min={0}
-                max={500}
-                step={5}
+                max={5}
+                step={0.05}
                 className="flex h-9 w-24 rounded-md border border-input bg-transparent px-3 py-1 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
@@ -1129,28 +1161,22 @@ export function HistoryPage() {
   const perfData = perfQ.data
   const hasYears = perfData != null && Object.keys(perfData.per_year).length > 0
 
-  const handleRefresh = () => {
-    perfQ.refetch()
-    quarterlyQ.refetch()
+  const refetchHistory = () => {
+    void perfQ.refetch()
+    void quarterlyQ.refetch()
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Historical Performance</h1>
-          <p className="text-sm text-muted-foreground">
-            Walk-forward backtest results and quarterly breakdown
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-          <RefreshCw className={cn('size-3.5', isLoading && 'animate-spin')} />
-          Refresh
-        </Button>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Historical Performance</h1>
+        <p className="text-sm text-muted-foreground">
+          Walk-forward backtest results and quarterly breakdown
+        </p>
       </div>
 
       {isLoading && <HistorySkeleton />}
-      {isError && <HistoryError onRetry={handleRefresh} />}
+      {isError && <HistoryError onRetry={refetchHistory} />}
       {!isLoading && perfData != null && !hasYears && <EmptyState />}
       {hasYears && (
         <HistoryContent

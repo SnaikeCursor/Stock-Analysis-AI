@@ -3,9 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   AlertTriangle,
+  Check,
   CircleDollarSign,
   Loader2,
+  Minus,
   Plus,
+  ShoppingCart,
+  Sparkles,
   Trash2,
   TrendingUp,
   Wallet,
@@ -14,9 +18,12 @@ import {
 
 import {
   api,
+  type ApplySignalResponse,
   type MyClosedPosition,
   type MyOpenPosition,
   type MyPortfolioSummary,
+  type SignalOut,
+  type SignalPosition,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +45,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+// ---------------------------------------------------------------------------
+// Formatters
+// ---------------------------------------------------------------------------
+
 function fmtChf(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—'
   return v.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -48,16 +59,36 @@ function fmtPct(v: number | null | undefined): string {
   return `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`
 }
 
+function fmtWeight(v: number): string {
+  return `${(v * 100).toFixed(1)}%`
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  try {
+    return format(new Date(iso), 'dd.MM.yyyy')
+  } catch {
+    return iso
+  }
 }
 
 const inputClass =
   'flex h-8 w-full min-w-0 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
+// ---------------------------------------------------------------------------
+// Main Portfolio Page
+// ---------------------------------------------------------------------------
+
 export function PortfolioPage() {
   const queryClient = useQueryClient()
+
+  // --- Cash / Position form state ---
   const [depositRaw, setDepositRaw] = useState('')
+  const [withdrawRaw, setWithdrawRaw] = useState('')
   const [ticker, setTicker] = useState('')
   const [sharesRaw, setSharesRaw] = useState('')
   const [entryPriceRaw, setEntryPriceRaw] = useState('')
@@ -66,6 +97,12 @@ export function PortfolioPage() {
   const [exitPriceRaw, setExitPriceRaw] = useState('')
   const [exitDate, setExitDate] = useState('')
 
+  // --- Signal wizard state ---
+  const [investAmountRaw, setInvestAmountRaw] = useState('')
+  const [generatedSignal, setGeneratedSignal] = useState<SignalOut | null>(null)
+  const [applyResult, setApplyResult] = useState<ApplySignalResponse | null>(null)
+
+  // --- Queries ---
   const overviewQuery = useQuery({
     queryKey: ['my-portfolio'],
     queryFn: api.getMyPortfolio,
@@ -90,10 +127,18 @@ export function PortfolioPage() {
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['my-portfolio'] })
     void queryClient.invalidateQueries({ queryKey: ['my-portfolio-summary'] })
+    void queryClient.invalidateQueries({ queryKey: ['my-portfolio-performance'] })
+    void queryClient.invalidateQueries({ queryKey: ['my-portfolio-overview'] })
   }, [queryClient])
 
+  // --- Mutations ---
   const depositMut = useMutation({
     mutationFn: api.depositMyPortfolio,
+    onSuccess: () => invalidate(),
+  })
+
+  const withdrawMut = useMutation({
+    mutationFn: api.withdrawMyPortfolio,
     onSuccess: () => invalidate(),
   })
 
@@ -129,11 +174,36 @@ export function PortfolioPage() {
     onSuccess: () => invalidate(),
   })
 
+  const generateMut = useMutation({
+    mutationFn: api.generateSignal,
+    onSuccess: (signal) => {
+      setGeneratedSignal(signal)
+      setApplyResult(null)
+    },
+  })
+
+  const applyMut = useMutation({
+    mutationFn: api.applySignal,
+    onSuccess: (result) => {
+      setApplyResult(result)
+      setGeneratedSignal(null)
+      invalidate()
+    },
+  })
+
+  // --- Handlers ---
   const handleDeposit = () => {
     const amount = parseFloat(depositRaw.replace(',', '.'))
     if (!Number.isFinite(amount) || amount <= 0) return
     depositMut.mutate({ amount })
     setDepositRaw('')
+  }
+
+  const handleWithdraw = () => {
+    const amount = parseFloat(withdrawRaw.replace(',', '.'))
+    if (!Number.isFinite(amount) || amount <= 0) return
+    withdrawMut.mutate({ amount })
+    setWithdrawRaw('')
   }
 
   const handleAdd = () => {
@@ -164,21 +234,33 @@ export function PortfolioPage() {
     })
   }
 
+  const handleGenerateSignal = () => {
+    setApplyResult(null)
+    generateMut.mutate({ cutoff_date: todayIso() })
+  }
+
+  const handleApplySignal = () => {
+    if (!generatedSignal) return
+    const investAmount = parseFloat(investAmountRaw.replace(',', '.'))
+    if (!Number.isFinite(investAmount) || investAmount <= 0) return
+    applyMut.mutate({ signal_id: generatedSignal.id, investment_amount: investAmount })
+  }
+
+  // --- Derived ---
   const data = overviewQuery.data
   const summary: MyPortfolioSummary | undefined = summaryQuery.data
   const loading = overviewQuery.isLoading || summaryQuery.isLoading
   const err = overviewQuery.error || summaryQuery.error
-
   const closingRow =
     closingId != null ? data?.open_positions.find((p) => p.id === closingId) : undefined
+  const investAmount = parseFloat(investAmountRaw.replace(',', '.')) || 0
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Mein Portfolio</h1>
         <p className="text-sm text-muted-foreground">
-          Cash, Positionen und Schaetzung Swissquote-Gebuehren (CHF). Identitaet: Kurz-Code in der
-          Kopfzeile.
+          Cash verwalten, Signale generieren und Positionen kaufen/verkaufen.
         </p>
       </div>
 
@@ -200,6 +282,7 @@ export function PortfolioPage() {
         </div>
       )}
 
+      {/* KPI Cards */}
       {!loading && summary && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi
@@ -229,11 +312,11 @@ export function PortfolioPage() {
         </div>
       )}
 
+      {/* Cash Management */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Cash einzahlen</CardTitle>
-            <CardDescription>Betrag in CHF auf das freie Cash-Konto.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
@@ -258,86 +341,231 @@ export function PortfolioPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Position hinzufuegen</CardTitle>
-            <CardDescription>Kauf: Notional + Swissquote-Gebuehr werden vom Cash abgezogen.</CardDescription>
+            <CardTitle className="text-base">Cash auszahlen</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Ticker (z. B. NESN.SW)</label>
-                <input
-                  className={inputClass}
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value)}
-                  placeholder="NESN.SW"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Stueck</label>
-                <input
-                  type="number"
-                  min={1}
-                  className={inputClass}
-                  value={sharesRaw}
-                  onChange={(e) => setSharesRaw(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Einstiegspreis (CHF)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className={inputClass}
-                  value={entryPriceRaw}
-                  onChange={(e) => setEntryPriceRaw(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Datum</label>
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                />
-              </div>
+          <CardContent className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground" htmlFor="wd">
+                Betrag (CHF)
+              </label>
+              <input
+                id="wd"
+                type="text"
+                inputMode="decimal"
+                className={cn(inputClass, 'w-40')}
+                value={withdrawRaw}
+                onChange={(e) => setWithdrawRaw(e.target.value)}
+              />
             </div>
-            {notionalPreview > 0 && feePreviewQuery.data && (
-              <p className="text-xs text-muted-foreground">
-                Notional ~{fmtChf(notionalPreview)} CHF · Geschaetzte Gebuehr ca.{' '}
-                {fmtChf(feePreviewQuery.data.fee_chf)} CHF · Total Abgang ca.{' '}
-                {fmtChf(notionalPreview + feePreviewQuery.data.fee_chf)} CHF
-              </p>
-            )}
-            {addMut.isError && (
+            <Button size="sm" onClick={handleWithdraw} disabled={withdrawMut.isPending}>
+              {withdrawMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Minus className="size-3.5" />}
+              Auszahlen
+            </Button>
+            {withdrawMut.isError && (
               <p className="text-sm text-destructive">
-                {addMut.error instanceof Error ? addMut.error.message : 'Fehler'}
+                {withdrawMut.error instanceof Error ? withdrawMut.error.message : 'Fehler'}
               </p>
             )}
           </CardContent>
-          <CardFooter>
-            <Button size="sm" onClick={handleAdd} disabled={addMut.isPending}>
-              {addMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              Position buchen
-            </Button>
-          </CardFooter>
         </Card>
       </div>
 
+      {/* Signal Generation & Apply */}
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="size-4 text-primary" />
+            Signal generieren & investieren
+          </CardTitle>
+          <CardDescription>
+            Generiere ein neues Trading-Signal und kaufe die empfohlenen Positionen direkt ins Portfolio.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <Button
+              size="sm"
+              onClick={handleGenerateSignal}
+              disabled={generateMut.isPending}
+            >
+              {generateMut.isPending ? (
+                <Loader2 className="mr-1 size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1 size-3.5" />
+              )}
+              Signal generieren
+            </Button>
+            {generateMut.isError && (
+              <p className="text-sm text-destructive">
+                {generateMut.error instanceof Error ? generateMut.error.message : 'Fehler bei der Signalgenerierung'}
+              </p>
+            )}
+          </div>
+
+          {generatedSignal && (
+            <div className="space-y-4 rounded-md border p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">
+                  Signal #{generatedSignal.id} — {generatedSignal.cutoff_date}
+                </h3>
+                <Badge variant="secondary">
+                  {generatedSignal.portfolio.length} Positionen
+                </Badge>
+              </div>
+
+              <SignalRecommendationTable
+                positions={generatedSignal.portfolio}
+                investAmount={investAmount}
+              />
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Investitionsbetrag (CHF)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className={cn(inputClass, 'w-48')}
+                    placeholder={`Max: ${fmtChf(summary?.cash_balance)}`}
+                    value={investAmountRaw}
+                    onChange={(e) => setInvestAmountRaw(e.target.value)}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleApplySignal}
+                  disabled={applyMut.isPending || investAmount <= 0}
+                >
+                  {applyMut.isPending ? (
+                    <Loader2 className="mr-1 size-3.5 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="mr-1 size-3.5" />
+                  )}
+                  Positionen kaufen
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setGeneratedSignal(null)}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+              {applyMut.isError && (
+                <p className="text-sm text-destructive">
+                  {applyMut.error instanceof Error ? applyMut.error.message : 'Fehler beim Kauf'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {applyResult && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                <Check className="size-4" />
+                Signal #{applyResult.signal_id} erfolgreich angewendet
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {applyResult.positions_created.length} Positionen gekauft ·{' '}
+                {fmtChf(applyResult.total_invested)} CHF investiert ·{' '}
+                {fmtChf(applyResult.cash_remaining)} CHF Cash verbleibend
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-2"
+                onClick={() => setApplyResult(null)}
+              >
+                Schliessen
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Manual Position Entry */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Position manuell hinzufuegen</CardTitle>
+          <CardDescription>Kauf: Notional + Swissquote-Gebuehr werden vom Cash abgezogen.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Ticker (z. B. NESN.SW)</label>
+              <input
+                className={inputClass}
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value)}
+                placeholder="NESN.SW"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Stueck</label>
+              <input
+                type="number"
+                min={1}
+                className={inputClass}
+                value={sharesRaw}
+                onChange={(e) => setSharesRaw(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Einstiegspreis (CHF)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                value={entryPriceRaw}
+                onChange={(e) => setEntryPriceRaw(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Datum</label>
+              <input
+                type="date"
+                className={inputClass}
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+              />
+            </div>
+          </div>
+          {notionalPreview > 0 && feePreviewQuery.data && (
+            <p className="text-xs text-muted-foreground">
+              Notional ~{fmtChf(notionalPreview)} CHF · Geschaetzte Gebuehr ca.{' '}
+              {fmtChf(feePreviewQuery.data.fee_chf)} CHF · Total Abgang ca.{' '}
+              {fmtChf(notionalPreview + feePreviewQuery.data.fee_chf)} CHF
+            </p>
+          )}
+          {addMut.isError && (
+            <p className="text-sm text-destructive">
+              {addMut.error instanceof Error ? addMut.error.message : 'Fehler'}
+            </p>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button size="sm" onClick={handleAdd} disabled={addMut.isPending}>
+            {addMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            Position buchen
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {/* Open Positions */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <TrendingUp className="size-4 opacity-70" />
             Offene Positionen
           </CardTitle>
-          <CardDescription>Live-Kurs aus Backend-Cache (yfinance), wo verfuegbar.</CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <OpenPositionsTable
             rows={data?.open_positions ?? []}
             onClose={openClose}
             onDelete={(id) => {
-              if (confirm('Offene Position wirklich loeschen? Einstiegsnotional wird gutgeschrieben (Gebuehr bleibt verbucht).')) {
+              if (confirm('Offene Position wirklich loeschen?')) {
                 deleteMut.mutate(id)
               }
             }}
@@ -346,6 +574,7 @@ export function PortfolioPage() {
         </CardContent>
       </Card>
 
+      {/* Close Position Dialog */}
       {closingId != null && closingRow && (
         <Card className="border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20">
           <CardHeader className="pb-2">
@@ -379,10 +608,10 @@ export function PortfolioPage() {
         </Card>
       )}
 
+      {/* Closed Positions */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Geschlossene Positionen</CardTitle>
-          <CardDescription>Historie; loeschen macht die Buchung rueckgaengig (Cash + P&L).</CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <ClosedPositionsTable
@@ -399,6 +628,10 @@ export function PortfolioPage() {
     </div>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function Kpi({
   title,
@@ -432,6 +665,53 @@ function Kpi({
         {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
       </CardHeader>
     </Card>
+  )
+}
+
+function SignalRecommendationTable({
+  positions,
+  investAmount,
+}: {
+  positions: SignalPosition[]
+  investAmount: number
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Ticker</TableHead>
+          <TableHead className="text-right">Gewicht</TableHead>
+          <TableHead className="text-right">Erw. Rendite</TableHead>
+          <TableHead className="text-right">Kurs</TableHead>
+          {investAmount > 0 && (
+            <>
+              <TableHead className="text-right">Betrag</TableHead>
+              <TableHead className="text-right">Stueck</TableHead>
+            </>
+          )}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {positions.map((p) => {
+          const notional = investAmount * p.weight
+          const shares = p.current_price ? Math.floor(notional / p.current_price) : 0
+          return (
+            <TableRow key={p.ticker}>
+              <TableCell className="font-mono font-medium">{p.ticker}</TableCell>
+              <TableCell className="text-right tabular-nums">{fmtWeight(p.weight)}</TableCell>
+              <TableCell className="text-right tabular-nums">{fmtPct(p.predicted_return)}</TableCell>
+              <TableCell className="text-right tabular-nums">{fmtChf(p.current_price)}</TableCell>
+              {investAmount > 0 && (
+                <>
+                  <TableCell className="text-right tabular-nums">{fmtChf(notional)}</TableCell>
+                  <TableCell className="text-right tabular-nums font-medium">{shares}</TableCell>
+                </>
+              )}
+            </TableRow>
+          )
+        })}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -553,13 +833,4 @@ function ClosedPositionsTable({
       </TableBody>
     </Table>
   )
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  try {
-    return format(new Date(iso), 'dd.MM.yyyy')
-  } catch {
-    return iso
-  }
 }

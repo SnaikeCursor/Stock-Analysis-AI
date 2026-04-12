@@ -47,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TOP_N = 5
 _DEFAULT_MAX_WEIGHT = 0.30
+_MIN_POSITION_WEIGHT = 0.05
 _DEFAULT_HYSTERESIS_BUFFER = 2
 _SEMI_ANNUAL_REBALANCE_FREQ = 2
 _PUBLICATION_LAG_DAYS = 60
@@ -445,6 +446,12 @@ class ModelService:
         if max_weight < 1.0:
             weights = _apply_max_weight_cap(weights, max_weight)
 
+        weights = weights[weights >= _MIN_POSITION_WEIGHT]
+        if len(weights) == 0:
+            weights = pred_score.nlargest(1) / pred_score.nlargest(1).sum()
+        else:
+            weights = weights / weights.sum()
+
         regime_state = detect_regime(smi_ohlcv, cutoff_date)
         logger.info(
             "Regime at %s: %s (confidence=%.2f) — informational only",
@@ -466,9 +473,10 @@ class ModelService:
         portfolio_json = serialize_portfolio_bundle(portfolio, top_n)
 
         logger.info(
-            "Signal generated: %d positions (requested top_n=%d), model=Lag60-SA (semi-annual), regime=%s",
+            "Signal generated: %d positions (requested top_n=%d, min_weight=%.0f%%), model=Lag60-SA (semi-annual), regime=%s",
             len(portfolio),
             top_n,
+            _MIN_POSITION_WEIGHT * 100,
             regime_state.label.value,
         )
 

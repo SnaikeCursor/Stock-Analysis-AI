@@ -447,6 +447,31 @@ export type SwissquoteFeeEstimate = {
   fee_chf: number
 }
 
+export type ApplySignalResponse = {
+  signal_id: number
+  positions_created: {
+    ticker: string
+    shares: number
+    entry_price: number
+    entry_total: number
+    fee: number
+    weight: number
+  }[]
+  total_invested: number
+  cash_remaining: number
+}
+
+export type PortfolioPerformance = {
+  total_deposited: number
+  total_withdrawn: number
+  current_value: number
+  open_market_value: number
+  cash_balance: number
+  net_invested: number
+  total_pnl_abs: number
+  total_return_pct: number | null
+}
+
 // --- API ---
 
 export const api = {
@@ -558,6 +583,21 @@ export const api = {
     request<SwissquoteFeeEstimate>(
       `/api/me/swissquote-fee?${new URLSearchParams({ volume_chf: String(volumeChf) })}`,
     ),
+
+  applySignal: (body: { signal_id: number; investment_amount: number }) =>
+    request<ApplySignalResponse>(
+      '/api/me/portfolio/apply-signal',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
+    ),
+
+  withdrawMyPortfolio: (body: { amount: number }) =>
+    request<{ cash_balance: number }>(
+      '/api/me/portfolio/withdraw',
+      withJson({ method: 'POST', body: JSON.stringify(body) }),
+    ),
+
+  getMyPortfolioPerformance: () =>
+    request<PortfolioPerformance>('/api/me/portfolio/performance'),
 }
 
 export function getApiBaseUrl(): string {

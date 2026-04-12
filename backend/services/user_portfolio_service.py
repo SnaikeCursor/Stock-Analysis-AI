@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date
+import math
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.models.db import CashTransaction, UserPortfolio, UserPosition, UserProfile
+from backend.models.db import (
+    CashTransaction,
+    Signal,
+    UserPortfolio,
+    UserPosition,
+    UserProfile,
+)
+from backend.portfolio_json import parse_portfolio_json
 from backend.services.data_service import DataService
 from backend.services.fee_calculator import swissquote_fee
 
@@ -307,6 +315,230 @@ class UserPortfolioService:
         await session.refresh(pos)
         return pos
 
+    async def apply_signal(
+        self,
+        session: AsyncSession,
+        user: UserProfile,
+        *,
+        signal_id: int,
+        investment_amount: float,
+    ) -> dict[str, Any]:
+        """Buy the positions recommended by a signal into the user portfolio.
+
+        Calculates shares per position based on weight and current prices,
+        deducts cash (notional + Swissquote fees), and creates UserPositions.
+        """
+        stmt = select(Signal).where(Signal.id == signal_id)
+        res = await session.execute(stmt)
+        signal = res.scalar_one_or_none()
+        if signal is None:
+            raise ValueError(f"Signal {signal_id} not found")
+
+        portfolio_entries, _ = parse_portfolio_json(signal.portfolio_json)
+        if not portfolio_entries:
+            raise ValueError("Signal has no positions")
+
+        pf = await _get_or_create_portfolio(session, user, load_positions=False)
+        cash = float(pf.cash_balance)
+        if investment_amount > cash:
+            raise ValueError(
+                f"Insufficient cash: want to invest {investment_amount:.2f} CHF "
+                f"but only {cash:.2f} available"
+            )
+
+        tickers = [e["ticker"] for e in portfolio_entries]
+        prices = await asyncio.to_thread(self._prices_map, tickers)
+
+        today = date.today().isoformat()
+        created: list[dict[str, Any]] = []
+        total_cost = 0.0
+
+        for entry in portfolio_entries:
+            ticker = entry["ticker"]
+            weight = float(entry["weight"])
+            price = prices.get(ticker)
+            if price is None or price <= 0:
+                logger.warning("Skipping %s — no current price available", ticker)
+                continue
+
+            notional = investment_amount * weight
+            shares = math.floor(notional / price)
+            if shares < 1:
+                logger.info("Skipping %s — weight too small for even 1 share", ticker)
+                continue
+
+            entry_total = round(shares * price, 2)
+            fee = swissquote_fee(entry_total)
+            cost = round(entry_total + fee, 2)
+
+            if total_cost + cost > cash:
+                logger.warning(
+                    "Skipping %s — would exceed cash (need %.2f, remaining %.2f)",
+                    ticker, cost, cash - total_cost,
+                )
+                continue
+
+            pos = UserPosition(
+                portfolio_id=pf.id,
+                ticker=ticker,
+                shares=shares,
+                entry_price=price,
+                entry_date=today,
+                entry_total=entry_total,
+                entry_fee=fee,
+                status="open",
+            )
+            session.add(pos)
+            session.add(
+                CashTransaction(
+                    portfolio_id=pf.id,
+                    amount=-cost,
+                    tx_type="buy",
+                    description=f"Signal #{signal_id}: Buy {shares} {ticker} @ {price:.2f}",
+                )
+            )
+            total_cost += cost
+            created.append({
+                "ticker": ticker,
+                "shares": shares,
+                "entry_price": price,
+                "entry_total": entry_total,
+                "fee": fee,
+                "weight": weight,
+            })
+
+        pf.cash_balance = round(cash - total_cost, 2)
+        signal.status = "active"
+        await session.commit()
+
+        logger.info(
+            "Signal %d applied to user %s: %d positions, %.2f CHF invested, %.2f CHF remaining",
+            signal_id, user.uuid[:8], len(created), total_cost, float(pf.cash_balance),
+        )
+
+        return {
+            "signal_id": signal_id,
+            "positions_created": created,
+            "total_invested": round(total_cost, 2),
+            "cash_remaining": round(float(pf.cash_balance), 2),
+        }
+
+    async def compute_performance(
+        self,
+        session: AsyncSession,
+        user: UserProfile,
+    ) -> dict[str, Any]:
+        """Compute portfolio performance using Modified Dietz method.
+
+        Accounts for deposits/withdrawals so that cash flows don't distort
+        the return calculation.
+        """
+        pf = await _get_or_create_portfolio(session, user, load_positions=True)
+
+        stmt = (
+            select(CashTransaction)
+            .where(CashTransaction.portfolio_id == pf.id)
+            .order_by(CashTransaction.created_at.asc())
+        )
+        res = await session.execute(stmt)
+        transactions = list(res.scalars().all())
+
+        if not transactions:
+            return {
+                "total_deposited": 0.0,
+                "total_withdrawn": 0.0,
+                "current_value": round(float(pf.cash_balance), 2),
+                "total_return_pct": None,
+                "total_pnl_abs": 0.0,
+            }
+
+        total_deposited = 0.0
+        total_withdrawn = 0.0
+        external_flows: list[tuple[datetime, float]] = []
+
+        for tx in transactions:
+            if tx.tx_type == "deposit":
+                total_deposited += float(tx.amount)
+                external_flows.append((tx.created_at, float(tx.amount)))
+            elif tx.tx_type == "withdrawal":
+                total_withdrawn += abs(float(tx.amount))
+                external_flows.append((tx.created_at, float(tx.amount)))
+
+        tickers = [p.ticker for p in pf.positions if p.status == "open"]
+        prices: dict[str, float | None] = {}
+        if tickers:
+            prices = await asyncio.to_thread(self._prices_map, tickers)
+
+        open_market_value = 0.0
+        for pos in pf.positions:
+            if pos.status == "open":
+                cur = prices.get(pos.ticker)
+                if cur is not None:
+                    open_market_value += float(pos.shares) * cur
+
+        current_value = float(pf.cash_balance) + open_market_value
+        net_external = total_deposited - total_withdrawn
+
+        # Modified Dietz: R = (V_end - V_start - sum(CF)) / (V_start + sum(w_i * CF_i))
+        # V_start = 0 for a new portfolio, so we use net_external as the denominator base.
+        if not external_flows:
+            return_pct = None
+        else:
+            first_date = external_flows[0][0]
+            last_date = datetime.now(first_date.tzinfo) if first_date.tzinfo else datetime.now()
+            total_days = max((last_date - first_date).days, 1)
+
+            weighted_cf = 0.0
+            for dt, amount in external_flows:
+                days_remaining = max((last_date - dt).days, 0)
+                w = days_remaining / total_days
+                weighted_cf += w * amount
+
+            if weighted_cf > 0:
+                return_pct = round((current_value - net_external) / weighted_cf, 6)
+            elif net_external > 0:
+                return_pct = round((current_value - net_external) / net_external, 6)
+            else:
+                return_pct = None
+
+        return {
+            "total_deposited": round(total_deposited, 2),
+            "total_withdrawn": round(total_withdrawn, 2),
+            "current_value": round(current_value, 2),
+            "open_market_value": round(open_market_value, 2),
+            "cash_balance": round(float(pf.cash_balance), 2),
+            "net_invested": round(net_external, 2),
+            "total_pnl_abs": round(current_value - net_external, 2),
+            "total_return_pct": return_pct,
+        }
+
+    async def withdraw(
+        self,
+        session: AsyncSession,
+        user: UserProfile,
+        amount: float,
+    ) -> UserPortfolio:
+        """Withdraw cash from portfolio."""
+        if amount <= 0:
+            raise ValueError("Withdrawal amount must be positive")
+        pf = await _get_or_create_portfolio(session, user, load_positions=False)
+        if float(pf.cash_balance) < amount:
+            raise ValueError(
+                f"Insufficient cash: want {amount:.2f} but only {pf.cash_balance:.2f} available"
+            )
+        pf.cash_balance = round(float(pf.cash_balance) - amount, 2)
+        session.add(
+            CashTransaction(
+                portfolio_id=pf.id,
+                amount=-amount,
+                tx_type="withdrawal",
+                description="Cash withdrawal",
+            )
+        )
+        await session.commit()
+        await session.refresh(pf)
+        return pf
+
     async def delete_position(
         self,
         session: AsyncSession,
@@ -324,15 +556,15 @@ class UserPortfolioService:
             raise ValueError("Position not found")
 
         if pos.status == "open":
-            # Refund entry notional only; entry fee is not refunded (already paid).
-            refund = float(pos.entry_total)
+            # Full reversal: refund entry notional + fee (error correction).
+            refund = float(pos.entry_total) + float(pos.entry_fee or 0)
             pf.cash_balance = round(float(pf.cash_balance) + refund, 2)
             session.add(
                 CashTransaction(
                     portfolio_id=pf.id,
                     amount=refund,
                     tx_type="delete_open_refund",
-                    description=f"Delete open {pos.ticker} — refund entry notional",
+                    description=f"Delete open {pos.ticker} — full reversal (entry + fee)",
                 )
             )
         else:

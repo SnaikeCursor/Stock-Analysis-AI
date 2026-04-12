@@ -41,6 +41,15 @@ class ClosePositionBody(BaseModel):
     exit_date: str | None = Field(None, description="ISO date; defaults to today")
 
 
+class ApplySignalBody(BaseModel):
+    signal_id: int = Field(..., description="ID of the signal to apply")
+    investment_amount: float = Field(..., gt=0, description="CHF to invest from cash balance")
+
+
+class WithdrawBody(BaseModel):
+    amount: float = Field(..., gt=0, description="CHF to withdraw from cash balance")
+
+
 # ------------------------------------------------------------------
 # Routes
 # ------------------------------------------------------------------
@@ -133,6 +142,50 @@ async def delete_position(
         await svc.delete_position(session, user, position_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/portfolio/performance")
+async def get_performance(
+    user: UserProfile = Depends(get_or_create_user),
+    session: AsyncSession = Depends(get_session),
+    svc: UserPortfolioService = Depends(_user_portfolio_service),
+) -> dict[str, Any]:
+    """Portfolio performance with Modified Dietz return (cash-flow adjusted)."""
+    return await svc.compute_performance(session, user)
+
+
+@router.post("/portfolio/apply-signal")
+async def apply_signal(
+    body: ApplySignalBody,
+    user: UserProfile = Depends(get_or_create_user),
+    session: AsyncSession = Depends(get_session),
+    svc: UserPortfolioService = Depends(_user_portfolio_service),
+) -> dict[str, Any]:
+    """Buy signal-recommended positions into the user portfolio."""
+    try:
+        result = await svc.apply_signal(
+            session,
+            user,
+            signal_id=body.signal_id,
+            investment_amount=body.investment_amount,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@router.post("/portfolio/withdraw")
+async def withdraw_cash(
+    body: WithdrawBody,
+    user: UserProfile = Depends(get_or_create_user),
+    session: AsyncSession = Depends(get_session),
+    svc: UserPortfolioService = Depends(_user_portfolio_service),
+) -> dict[str, Any]:
+    try:
+        pf = await svc.withdraw(session, user, body.amount)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"cash_balance": round(float(pf.cash_balance), 2)}
 
 
 @router.get("/swissquote-fee")
