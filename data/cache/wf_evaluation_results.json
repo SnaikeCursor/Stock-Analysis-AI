@@ -1,0 +1,1829 @@
+{
+  "meta": {
+    "publication_lag_days": 60,
+    "costs_bps": 40.0,
+    "top_n": 5,
+    "oos_years": [
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "generated_at": "2026-04-08T14:44:22.390694"
+  },
+  "frequencies": {
+    "quarterly": {
+      "per_year": {
+        "2015": {
+          "long_only": {
+            "cumulative_return": 0.150292488998631,
+            "annualized_return": 0.15093433987253957,
+            "volatility": 0.3951382794159155,
+            "sharpe_ratio": 0.381978531909506,
+            "max_drawdown": -0.33397242989160597,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.0738070001888056,
+            "annualized_return": 0.07441890322797806,
+            "volatility": 0.12028072356272548,
+            "sharpe_ratio": 0.6187101392782125,
+            "max_drawdown": -0.1058915042584586,
+            "n_trading_days": 250
+          },
+          "costs_bps": 160.0
+        },
+        "2016": {
+          "long_only": {
+            "cumulative_return": 0.2897309791317313,
+            "annualized_return": 0.2871496998167282,
+            "volatility": 0.17928599893583205,
+            "sharpe_ratio": 1.6016292489158703,
+            "max_drawdown": -0.08950979607399533,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": 0.10554796302613778,
+            "annualized_return": 0.10510958393369663,
+            "volatility": 0.107287810578438,
+            "sharpe_ratio": 0.9796973520757153,
+            "max_drawdown": -0.0838726520617263,
+            "n_trading_days": 253
+          },
+          "costs_bps": 304.0
+        },
+        "2017": {
+          "long_only": {
+            "cumulative_return": 0.5426053076290414,
+            "annualized_return": 0.5452716625582879,
+            "volatility": 0.22440188284676785,
+            "sharpe_ratio": 2.4298889815047806,
+            "max_drawdown": -0.13483000249051544,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.2101564687094737,
+            "annualized_return": 0.21200457397326367,
+            "volatility": 0.06608039717434372,
+            "sharpe_ratio": 3.2082823808385985,
+            "max_drawdown": -0.03003721029516295,
+            "n_trading_days": 250
+          },
+          "costs_bps": 224.0
+        },
+        "2018": {
+          "long_only": {
+            "cumulative_return": -0.13728506304746024,
+            "annualized_return": -0.13881861338433998,
+            "volatility": 0.23202166855795853,
+            "sharpe_ratio": -0.5983002115583157,
+            "max_drawdown": -0.3321302750638397,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": -0.19450704003117025,
+            "annualized_return": -0.1973122855143825,
+            "volatility": 0.11280455988785358,
+            "sharpe_ratio": -1.7491516806638279,
+            "max_drawdown": -0.23747309458196159,
+            "n_trading_days": 248
+          },
+          "costs_bps": 256.0
+        },
+        "2019": {
+          "long_only": {
+            "cumulative_return": 1.2624719270743485,
+            "annualized_return": 1.2848373308866354,
+            "volatility": 0.4820336521508363,
+            "sharpe_ratio": 2.6654515201452957,
+            "max_drawdown": -0.17500666230730996,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": 0.21463098857405183,
+            "annualized_return": 0.2184462137038703,
+            "volatility": 0.08645835956378377,
+            "sharpe_ratio": 2.526606042562187,
+            "max_drawdown": -0.06868097091245393,
+            "n_trading_days": 248
+          },
+          "costs_bps": 272.0
+        },
+        "2020": {
+          "long_only": {
+            "cumulative_return": 0.3554161950232726,
+            "annualized_return": 0.3554161950232726,
+            "volatility": 0.24631271811197697,
+            "sharpe_ratio": 1.4429469892890214,
+            "max_drawdown": -0.12932537038856112,
+            "n_trading_days": 252
+          },
+          "benchmark": {
+            "cumulative_return": 0.0489476085762508,
+            "annualized_return": 0.04914733460898035,
+            "volatility": 0.193443882854782,
+            "sharpe_ratio": 0.2540650750164851,
+            "max_drawdown": -0.28886748430032766,
+            "n_trading_days": 251
+          },
+          "costs_bps": 304.0
+        },
+        "2021": {
+          "long_only": {
+            "cumulative_return": 0.492410156582878,
+            "annualized_return": 0.4877124504456143,
+            "volatility": 0.3533243604896715,
+            "sharpe_ratio": 1.3803533098303629,
+            "max_drawdown": -0.2477483429788532,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": 0.1664289390648266,
+            "annualized_return": 0.16571939958139104,
+            "volatility": 0.08999793426713432,
+            "sharpe_ratio": 1.8413689261966637,
+            "max_drawdown": -0.06650538151758476,
+            "n_trading_days": 253
+          },
+          "costs_bps": 256.0
+        },
+        "2022": {
+          "long_only": {
+            "cumulative_return": -0.09134119644022443,
+            "annualized_return": -0.09065561165896441,
+            "volatility": 0.37873370266806566,
+            "sharpe_ratio": -0.23936504995547725,
+            "max_drawdown": -0.3638295757116933,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": -0.16541268298342326,
+            "annualized_return": -0.16481599416204085,
+            "volatility": 0.15889626809250024,
+            "sharpe_ratio": -1.0372552869907208,
+            "max_drawdown": -0.24512495623882094,
+            "n_trading_days": 253
+          },
+          "costs_bps": 288.0
+        },
+        "2023": {
+          "long_only": {
+            "cumulative_return": 0.016040813132289555,
+            "annualized_return": 0.01610523264265229,
+            "volatility": 0.30959593840167876,
+            "sharpe_ratio": 0.05202016772505876,
+            "max_drawdown": -0.38489647256752835,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.02368056925338946,
+            "annualized_return": 0.023872257330703084,
+            "volatility": 0.09844867805932539,
+            "sharpe_ratio": 0.24248428522643656,
+            "max_drawdown": -0.1320811011778513,
+            "n_trading_days": 250
+          },
+          "costs_bps": 272.0
+        },
+        "2024": {
+          "long_only": {
+            "cumulative_return": 0.7878115247359219,
+            "annualized_return": 0.7961405032950672,
+            "volatility": 0.48423575086316833,
+            "sharpe_ratio": 1.6441175643804016,
+            "max_drawdown": -0.30793904446530124,
+            "n_trading_days": 250
+          },
+          "benchmark": {
+            "cumulative_return": 0.04730467463944277,
+            "annualized_return": 0.047888045536433,
+            "volatility": 0.08895475072359597,
+            "sharpe_ratio": 0.5383416304007506,
+            "max_drawdown": -0.09074318011181044,
+            "n_trading_days": 249
+          },
+          "costs_bps": 224.0
+        },
+        "2025": {
+          "long_only": {
+            "cumulative_return": 0.06112581481785995,
+            "annualized_return": 0.061884604722213465,
+            "volatility": 0.45761970671029834,
+            "sharpe_ratio": 0.13523151170015119,
+            "max_drawdown": -0.35163988160176335,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": 0.11337171209787877,
+            "annualized_return": 0.11530190454020284,
+            "volatility": 0.11659762812639475,
+            "sharpe_ratio": 0.9888872217470212,
+            "max_drawdown": -0.13442352917212602,
+            "n_trading_days": 248
+          },
+          "costs_bps": 192.0
+        }
+      },
+      "quarterly_detail": [
+        {
+          "year": 2015,
+          "quarter": "Q1",
+          "cutoff": "2014-12-31",
+          "start": "2015-01-01",
+          "end": "2015-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.5861288273201528,
+          "sharpe": 10.944330557873123,
+          "max_dd": -0.15010161448605433,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2015,
+          "quarter": "Q2",
+          "cutoff": "2015-03-31",
+          "start": "2015-04-01",
+          "end": "2015-06-30",
+          "n_positions": 5,
+          "n_swapped": 0,
+          "turnover_pct": 0.0,
+          "cost_bps": 0.0,
+          "cum_return": -0.2195751244506623,
+          "sharpe": -1.3668956531696252,
+          "max_dd": -0.24702400367019697,
+          "n_trading_days": 60
+        },
+        {
+          "year": 2015,
+          "quarter": "Q3",
+          "cutoff": "2015-06-30",
+          "start": "2015-07-01",
+          "end": "2015-09-30",
+          "n_positions": 5,
+          "n_swapped": 1,
+          "turnover_pct": 20.0,
+          "cost_bps": 16.0,
+          "cum_return": -0.02339095890249776,
+          "sharpe": -0.2850384379152518,
+          "max_dd": -0.12638996496403293,
+          "n_trading_days": 66
+        },
+        {
+          "year": 2015,
+          "quarter": "Q4",
+          "cutoff": "2015-09-30",
+          "start": "2015-10-01",
+          "end": "2015-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": -0.04847986810548277,
+          "sharpe": -0.7975320433219041,
+          "max_dd": -0.12259319908316281,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2016,
+          "quarter": "Q1",
+          "cutoff": "2015-12-31",
+          "start": "2016-01-01",
+          "end": "2016-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.10213204279957822,
+          "sharpe": 2.295270978299839,
+          "max_dd": -0.08950979607399533,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2016,
+          "quarter": "Q2",
+          "cutoff": "2016-03-31",
+          "start": "2016-04-01",
+          "end": "2016-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.07015271993419425,
+          "sharpe": 1.5152204622018148,
+          "max_dd": -0.08267517531681354,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2016,
+          "quarter": "Q3",
+          "cutoff": "2016-06-30",
+          "start": "2016-07-01",
+          "end": "2016-09-30",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 64.0,
+          "cum_return": 0.07989144653937696,
+          "sharpe": 2.6533758484964465,
+          "max_dd": -0.03070714643858495,
+          "n_trading_days": 65
+        },
+        {
+          "year": 2016,
+          "quarter": "Q4",
+          "cutoff": "2016-09-30",
+          "start": "2016-10-01",
+          "end": "2016-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": 0.012604007208027124,
+          "sharpe": 0.30976818476853274,
+          "max_dd": -0.05832627803691143,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2017,
+          "quarter": "Q1",
+          "cutoff": "2016-12-31",
+          "start": "2017-01-01",
+          "end": "2017-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.3641735378234989,
+          "sharpe": 11.99545753963162,
+          "max_dd": -0.029945444574003513,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2017,
+          "quarter": "Q2",
+          "cutoff": "2017-03-31",
+          "start": "2017-04-01",
+          "end": "2017-06-30",
+          "n_positions": 5,
+          "n_swapped": 2,
+          "turnover_pct": 40.0,
+          "cost_bps": 32.0,
+          "cum_return": -0.0005921206131174195,
+          "sharpe": -0.008943238793283112,
+          "max_dd": -0.12498798860011953,
+          "n_trading_days": 60
+        },
+        {
+          "year": 2017,
+          "quarter": "Q3",
+          "cutoff": "2017-06-30",
+          "start": "2017-07-01",
+          "end": "2017-09-30",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 48.0,
+          "cum_return": 0.06544836152606037,
+          "sharpe": 1.3390073712592552,
+          "max_dd": -0.07113484802910336,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2017,
+          "quarter": "Q4",
+          "cutoff": "2017-09-30",
+          "start": "2017-10-01",
+          "end": "2017-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": 0.061964564416771006,
+          "sharpe": 1.360091243236366,
+          "max_dd": -0.11237425570467932,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2018,
+          "quarter": "Q1",
+          "cutoff": "2017-12-31",
+          "start": "2018-01-01",
+          "end": "2018-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.21511988397116055,
+          "sharpe": 4.289013344973626,
+          "max_dd": -0.13696975999279665,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2018,
+          "quarter": "Q2",
+          "cutoff": "2018-03-31",
+          "start": "2018-04-01",
+          "end": "2018-06-30",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 64.0,
+          "cum_return": -0.09748638809501675,
+          "sharpe": -1.9197010374029588,
+          "max_dd": -0.13820344727812778,
+          "n_trading_days": 61
+        },
+        {
+          "year": 2018,
+          "quarter": "Q3",
+          "cutoff": "2018-06-30",
+          "start": "2018-07-01",
+          "end": "2018-09-30",
+          "n_positions": 5,
+          "n_swapped": 2,
+          "turnover_pct": 40.0,
+          "cost_bps": 32.0,
+          "cum_return": -0.009581210181080047,
+          "sharpe": -0.295102213523592,
+          "max_dd": -0.07453391894593026,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2018,
+          "quarter": "Q4",
+          "cutoff": "2018-09-30",
+          "start": "2018-10-01",
+          "end": "2018-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": -0.20571646856569692,
+          "sharpe": -2.0860814838423236,
+          "max_dd": -0.23045828131644236,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2019,
+          "quarter": "Q1",
+          "cutoff": "2018-12-31",
+          "start": "2019-01-01",
+          "end": "2019-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.8177154717354516,
+          "sharpe": 11.821154762479217,
+          "max_dd": -0.0882829772228046,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2019,
+          "quarter": "Q2",
+          "cutoff": "2019-03-31",
+          "start": "2019-04-01",
+          "end": "2019-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.3206192435568267,
+          "sharpe": 7.624358225564609,
+          "max_dd": -0.04121665116963066,
+          "n_trading_days": 60
+        },
+        {
+          "year": 2019,
+          "quarter": "Q3",
+          "cutoff": "2019-06-30",
+          "start": "2019-07-01",
+          "end": "2019-09-30",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 48.0,
+          "cum_return": -0.06742454157345701,
+          "sharpe": -1.3798135595290741,
+          "max_dd": -0.11800498623899151,
+          "n_trading_days": 65
+        },
+        {
+          "year": 2019,
+          "quarter": "Q4",
+          "cutoff": "2019-09-30",
+          "start": "2019-10-01",
+          "end": "2019-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": 0.010638158023606126,
+          "sharpe": 0.21143730720042264,
+          "max_dd": -0.09065516212906356,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2020,
+          "quarter": "Q1",
+          "cutoff": "2019-12-31",
+          "start": "2020-01-01",
+          "end": "2020-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.2051140303919221,
+          "sharpe": 2.7664458807987207,
+          "max_dd": -0.11378773075724823,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2020,
+          "quarter": "Q2",
+          "cutoff": "2020-03-31",
+          "start": "2020-04-01",
+          "end": "2020-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.035666917081325966,
+          "sharpe": 1.2348647486444306,
+          "max_dd": -0.029257105837437895,
+          "n_trading_days": 60
+        },
+        {
+          "year": 2020,
+          "quarter": "Q3",
+          "cutoff": "2020-06-30",
+          "start": "2020-07-01",
+          "end": "2020-09-30",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 64.0,
+          "cum_return": -0.02597010366497532,
+          "sharpe": -0.7799080037323631,
+          "max_dd": -0.05027352615938736,
+          "n_trading_days": 66
+        },
+        {
+          "year": 2020,
+          "quarter": "Q4",
+          "cutoff": "2020-09-30",
+          "start": "2020-10-01",
+          "end": "2020-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": 0.11494164426443887,
+          "sharpe": 2.4031139579548673,
+          "max_dd": -0.12932537038856073,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2021,
+          "quarter": "Q1",
+          "cutoff": "2020-12-31",
+          "start": "2021-01-01",
+          "end": "2021-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.5421499778636831,
+          "sharpe": 8.237982914313575,
+          "max_dd": -0.1896171175673242,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2021,
+          "quarter": "Q2",
+          "cutoff": "2021-03-31",
+          "start": "2021-04-01",
+          "end": "2021-06-30",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 48.0,
+          "cum_return": -0.12653844568360584,
+          "sharpe": -1.6316834551305675,
+          "max_dd": -0.20023293848920454,
+          "n_trading_days": 61
+        },
+        {
+          "year": 2021,
+          "quarter": "Q3",
+          "cutoff": "2021-06-30",
+          "start": "2021-07-01",
+          "end": "2021-09-30",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 48.0,
+          "cum_return": 0.18544919977335117,
+          "sharpe": 3.644467437195141,
+          "max_dd": -0.09987516795000548,
+          "n_trading_days": 66
+        },
+        {
+          "year": 2021,
+          "quarter": "Q4",
+          "cutoff": "2021-09-30",
+          "start": "2021-10-01",
+          "end": "2021-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": -0.06538049120871514,
+          "sharpe": -1.1354636728622785,
+          "max_dd": -0.0952675999657153,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2022,
+          "quarter": "Q1",
+          "cutoff": "2021-12-31",
+          "start": "2022-01-01",
+          "end": "2022-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.1917473628623254,
+          "sharpe": 3.5845801581735004,
+          "max_dd": -0.07396983715456334,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2022,
+          "quarter": "Q2",
+          "cutoff": "2022-03-31",
+          "start": "2022-04-01",
+          "end": "2022-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": -0.2712134446894675,
+          "sharpe": -2.285788166056475,
+          "max_dd": -0.3179246146401799,
+          "n_trading_days": 61
+        },
+        {
+          "year": 2022,
+          "quarter": "Q3",
+          "cutoff": "2022-06-30",
+          "start": "2022-07-01",
+          "end": "2022-09-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": -0.05554580459714631,
+          "sharpe": -0.3596440475155875,
+          "max_dd": -0.2399283118434875,
+          "n_trading_days": 65
+        },
+        {
+          "year": 2022,
+          "quarter": "Q4",
+          "cutoff": "2022-09-30",
+          "start": "2022-10-01",
+          "end": "2022-12-31",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 88.0,
+          "cum_return": 0.10773374721839835,
+          "sharpe": 1.7239160757418104,
+          "max_dd": -0.09687559445052447,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2023,
+          "quarter": "Q1",
+          "cutoff": "2022-12-31",
+          "start": "2023-01-01",
+          "end": "2023-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.11773472491056691,
+          "sharpe": 1.6886977885179808,
+          "max_dd": -0.15562012656766164,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2023,
+          "quarter": "Q2",
+          "cutoff": "2023-03-31",
+          "start": "2023-04-01",
+          "end": "2023-06-30",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 64.0,
+          "cum_return": 0.05045376808318269,
+          "sharpe": 0.7480306721426763,
+          "max_dd": -0.11885881230667623,
+          "n_trading_days": 60
+        },
+        {
+          "year": 2023,
+          "quarter": "Q3",
+          "cutoff": "2023-06-30",
+          "start": "2023-07-01",
+          "end": "2023-09-30",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 48.0,
+          "cum_return": -0.24926401745604,
+          "sharpe": -1.9250947782368815,
+          "max_dd": -0.26531119188997176,
+          "n_trading_days": 64
+        },
+        {
+          "year": 2023,
+          "quarter": "Q4",
+          "cutoff": "2023-09-30",
+          "start": "2023-10-01",
+          "end": "2023-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": 0.1526786114893679,
+          "sharpe": 3.2274648149380183,
+          "max_dd": -0.11031588258849105,
+          "n_trading_days": 63
+        },
+        {
+          "year": 2024,
+          "quarter": "Q1",
+          "cutoff": "2023-12-31",
+          "start": "2024-01-01",
+          "end": "2024-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.5780219180294426,
+          "sharpe": 10.217850547052066,
+          "max_dd": -0.1440557998504233,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2024,
+          "quarter": "Q2",
+          "cutoff": "2024-03-31",
+          "start": "2024-04-01",
+          "end": "2024-06-30",
+          "n_positions": 5,
+          "n_swapped": 2,
+          "turnover_pct": 40.0,
+          "cost_bps": 32.0,
+          "cum_return": 0.04102122311245471,
+          "sharpe": 0.30244715947066486,
+          "max_dd": -0.3076357699596935,
+          "n_trading_days": 61
+        },
+        {
+          "year": 2024,
+          "quarter": "Q3",
+          "cutoff": "2024-06-30",
+          "start": "2024-07-01",
+          "end": "2024-09-30",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 48.0,
+          "cum_return": 0.013008491918100606,
+          "sharpe": 0.142811374316,
+          "max_dd": -0.12891604898446055,
+          "n_trading_days": 65
+        },
+        {
+          "year": 2024,
+          "quarter": "Q4",
+          "cutoff": "2024-09-30",
+          "start": "2024-10-01",
+          "end": "2024-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": 0.0743258655572494,
+          "sharpe": 0.7899844235237781,
+          "max_dd": -0.20088857118721054,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2025,
+          "quarter": "Q1",
+          "cutoff": "2024-12-31",
+          "start": "2025-01-01",
+          "end": "2025-03-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": -0.1999443443767276,
+          "sharpe": -1.3979332026312443,
+          "max_dd": -0.24326553314712415,
+          "n_trading_days": 62
+        },
+        {
+          "year": 2025,
+          "quarter": "Q2",
+          "cutoff": "2025-03-31",
+          "start": "2025-04-01",
+          "end": "2025-06-30",
+          "n_positions": 5,
+          "n_swapped": 2,
+          "turnover_pct": 40.0,
+          "cost_bps": 32.0,
+          "cum_return": 0.14894107549652746,
+          "sharpe": 1.3832044616655814,
+          "max_dd": -0.1566371971366176,
+          "n_trading_days": 60
+        },
+        {
+          "year": 2025,
+          "quarter": "Q3",
+          "cutoff": "2025-06-30",
+          "start": "2025-07-01",
+          "end": "2025-09-30",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 64.0,
+          "cum_return": 0.29694025095103993,
+          "sharpe": 4.0186933912807,
+          "max_dd": -0.1952480437633481,
+          "n_trading_days": 65
+        },
+        {
+          "year": 2025,
+          "quarter": "Q4",
+          "cutoff": "2025-09-30",
+          "start": "2025-10-01",
+          "end": "2025-12-31",
+          "n_positions": 5,
+          "n_swapped": 1,
+          "turnover_pct": 20.0,
+          "cost_bps": 56.0,
+          "cum_return": -0.10992017854946368,
+          "sharpe": -0.9874288601814791,
+          "max_dd": -0.22172810990182798,
+          "n_trading_days": 62
+        }
+      ],
+      "total_costs_bps": 2752.0,
+      "rebalance_freq": 1
+    },
+    "semi_annual": {
+      "per_year": {
+        "2015": {
+          "long_only": {
+            "cumulative_return": 0.30412707642345205,
+            "annualized_return": 0.3055074477267301,
+            "volatility": 0.35327278332090584,
+            "sharpe_ratio": 0.8647919176077975,
+            "max_drawdown": -0.27009473302003345,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.0738070001888056,
+            "annualized_return": 0.07441890322797806,
+            "volatility": 0.12028072356272548,
+            "sharpe_ratio": 0.6187101392782125,
+            "max_drawdown": -0.1058915042584586,
+            "n_trading_days": 250
+          },
+          "costs_bps": 96.0
+        },
+        "2016": {
+          "long_only": {
+            "cumulative_return": 0.2618097968593567,
+            "annualized_return": 0.259501437436654,
+            "volatility": 0.17345477517858363,
+            "sharpe_ratio": 1.4960754880889235,
+            "max_drawdown": -0.1152725330993168,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": 0.10554796302613778,
+            "annualized_return": 0.10510958393369663,
+            "volatility": 0.107287810578438,
+            "sharpe_ratio": 0.9796973520757153,
+            "max_drawdown": -0.0838726520617263,
+            "n_trading_days": 253
+          },
+          "costs_bps": 144.0
+        },
+        "2017": {
+          "long_only": {
+            "cumulative_return": 0.6249457108860439,
+            "annualized_return": 0.628091658882461,
+            "volatility": 0.22009354760695288,
+            "sharpe_ratio": 2.85374862512607,
+            "max_drawdown": -0.09892216520106402,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.2101564687094737,
+            "annualized_return": 0.21200457397326367,
+            "volatility": 0.06608039717434372,
+            "sharpe_ratio": 3.2082823808385985,
+            "max_drawdown": -0.03003721029516295,
+            "n_trading_days": 250
+          },
+          "costs_bps": 128.0
+        },
+        "2018": {
+          "long_only": {
+            "cumulative_return": -0.08715903163768546,
+            "annualized_return": -0.08816143571915536,
+            "volatility": 0.21913551215361698,
+            "sharpe_ratio": -0.40231469036088036,
+            "max_drawdown": -0.30008508434264997,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": -0.19450704003117025,
+            "annualized_return": -0.1973122855143825,
+            "volatility": 0.11280455988785358,
+            "sharpe_ratio": -1.7491516806638279,
+            "max_drawdown": -0.23747309458196159,
+            "n_trading_days": 248
+          },
+          "costs_bps": 160.0
+        },
+        "2019": {
+          "long_only": {
+            "cumulative_return": 0.8780805856643865,
+            "annualized_return": 0.8923958413528805,
+            "volatility": 0.4688391336848582,
+            "sharpe_ratio": 1.9034158568186554,
+            "max_drawdown": -0.1710471999978584,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": 0.21463098857405183,
+            "annualized_return": 0.2184462137038703,
+            "volatility": 0.08645835956378377,
+            "sharpe_ratio": 2.526606042562187,
+            "max_drawdown": -0.06868097091245393,
+            "n_trading_days": 248
+          },
+          "costs_bps": 144.0
+        },
+        "2020": {
+          "long_only": {
+            "cumulative_return": 0.603191443870744,
+            "annualized_return": 0.603191443870744,
+            "volatility": 0.25946909732955475,
+            "sharpe_ratio": 2.32471400285724,
+            "max_drawdown": -0.11378773075724823,
+            "n_trading_days": 252
+          },
+          "benchmark": {
+            "cumulative_return": 0.0489476085762508,
+            "annualized_return": 0.04914733460898035,
+            "volatility": 0.193443882854782,
+            "sharpe_ratio": 0.2540650750164851,
+            "max_drawdown": -0.28886748430032766,
+            "n_trading_days": 251
+          },
+          "costs_bps": 128.0
+        },
+        "2021": {
+          "long_only": {
+            "cumulative_return": 0.6137207652296246,
+            "annualized_return": 0.6076516237972409,
+            "volatility": 0.36454465440723394,
+            "sharpe_ratio": 1.6668784371157763,
+            "max_drawdown": -0.2273099361062152,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": 0.1664289390648266,
+            "annualized_return": 0.16571939958139104,
+            "volatility": 0.08999793426713432,
+            "sharpe_ratio": 1.8413689261966637,
+            "max_drawdown": -0.06650538151758476,
+            "n_trading_days": 253
+          },
+          "costs_bps": 128.0
+        },
+        "2022": {
+          "long_only": {
+            "cumulative_return": -0.04789951105768919,
+            "annualized_return": -0.047531459139771304,
+            "volatility": 0.35366035533145473,
+            "sharpe_ratio": -0.13439860709076157,
+            "max_drawdown": -0.24627569365602595,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": -0.16541268298342326,
+            "annualized_return": -0.16481599416204085,
+            "volatility": 0.15889626809250024,
+            "sharpe_ratio": -1.0372552869907208,
+            "max_drawdown": -0.24512495623882094,
+            "n_trading_days": 253
+          },
+          "costs_bps": 144.0
+        },
+        "2023": {
+          "long_only": {
+            "cumulative_return": -0.23062488430019223,
+            "annualized_return": -0.23142809890552563,
+            "volatility": 0.3250327614441421,
+            "sharpe_ratio": -0.7120146839268608,
+            "max_drawdown": -0.4274903928078196,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.02368056925338946,
+            "annualized_return": 0.023872257330703084,
+            "volatility": 0.09844867805932539,
+            "sharpe_ratio": 0.24248428522643656,
+            "max_drawdown": -0.1320811011778513,
+            "n_trading_days": 250
+          },
+          "costs_bps": 160.0
+        },
+        "2024": {
+          "long_only": {
+            "cumulative_return": 0.8868129293139233,
+            "annualized_return": 0.896420644070433,
+            "volatility": 0.4394308443179645,
+            "sharpe_ratio": 2.039958404517,
+            "max_drawdown": -0.18998093860875045,
+            "n_trading_days": 250
+          },
+          "benchmark": {
+            "cumulative_return": 0.04730467463944277,
+            "annualized_return": 0.047888045536433,
+            "volatility": 0.08895475072359597,
+            "sharpe_ratio": 0.5383416304007506,
+            "max_drawdown": -0.09074318011181044,
+            "n_trading_days": 249
+          },
+          "costs_bps": 128.0
+        },
+        "2025": {
+          "long_only": {
+            "cumulative_return": 0.41106228724540417,
+            "annualized_return": 0.41692853378778527,
+            "volatility": 0.5050439089944212,
+            "sharpe_ratio": 0.8255292784699058,
+            "max_drawdown": -0.3465119053441914,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": 0.11337171209787877,
+            "annualized_return": 0.11530190454020284,
+            "volatility": 0.11659762812639475,
+            "sharpe_ratio": 0.9888872217470212,
+            "max_drawdown": -0.13442352917212602,
+            "n_trading_days": 248
+          },
+          "costs_bps": 144.0
+        }
+      },
+      "quarterly_detail": [
+        {
+          "year": 2015,
+          "quarter": "H1",
+          "cutoff": "2014-12-31",
+          "start": "2015-01-01",
+          "end": "2015-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.4175226087466577,
+          "sharpe": 2.581086152792995,
+          "max_dd": -0.18085021400329146,
+          "n_trading_days": 122
+        },
+        {
+          "year": 2015,
+          "quarter": "H2",
+          "cutoff": "2015-06-30",
+          "start": "2015-07-01",
+          "end": "2015-12-31",
+          "n_positions": 5,
+          "n_swapped": 1,
+          "turnover_pct": 20.0,
+          "cost_bps": 56.0,
+          "cum_return": -0.07999557229176635,
+          "sharpe": -0.5188949149631752,
+          "max_dd": -0.22276162424959972,
+          "n_trading_days": 129
+        },
+        {
+          "year": 2016,
+          "quarter": "H1",
+          "cutoff": "2015-12-31",
+          "start": "2016-01-01",
+          "end": "2016-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.18039816085726912,
+          "sharpe": 1.9292851243403522,
+          "max_dd": -0.08950979607399533,
+          "n_trading_days": 125
+        },
+        {
+          "year": 2016,
+          "quarter": "H2",
+          "cutoff": "2016-06-30",
+          "start": "2016-07-01",
+          "end": "2016-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": 0.06896963982302617,
+          "sharpe": 1.0273606191139029,
+          "max_dd": -0.11527253309931647,
+          "n_trading_days": 129
+        },
+        {
+          "year": 2017,
+          "quarter": "H1",
+          "cutoff": "2016-12-31",
+          "start": "2017-01-01",
+          "end": "2017-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.3979112617242768,
+          "sharpe": 4.4929899131585875,
+          "max_dd": -0.09313290766819668,
+          "n_trading_days": 124
+        },
+        {
+          "year": 2017,
+          "quarter": "H2",
+          "cutoff": "2017-06-30",
+          "start": "2017-07-01",
+          "end": "2017-12-31",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 88.0,
+          "cum_return": 0.16240977190621342,
+          "sharpe": 1.5591117911256658,
+          "max_dd": -0.0989221652010643,
+          "n_trading_days": 127
+        },
+        {
+          "year": 2018,
+          "quarter": "H1",
+          "cutoff": "2017-12-31",
+          "start": "2018-01-01",
+          "end": "2018-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.15874553509645617,
+          "sharpe": 1.3520341392938495,
+          "max_dd": -0.13696975999279665,
+          "n_trading_days": 123
+        },
+        {
+          "year": 2018,
+          "quarter": "H2",
+          "cutoff": "2018-06-30",
+          "start": "2018-07-01",
+          "end": "2018-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": -0.21221619353525412,
+          "sharpe": -2.2788967170080765,
+          "max_dd": -0.24707132870557946,
+          "n_trading_days": 126
+        },
+        {
+          "year": 2019,
+          "quarter": "H1",
+          "cutoff": "2018-12-31",
+          "start": "2019-01-01",
+          "end": "2019-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.8309532027370086,
+          "sharpe": 3.8683006492720224,
+          "max_dd": -0.10466494541088733,
+          "n_trading_days": 122
+        },
+        {
+          "year": 2019,
+          "quarter": "H2",
+          "cutoff": "2019-06-30",
+          "start": "2019-07-01",
+          "end": "2019-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": 0.025739261307677674,
+          "sharpe": 0.2902966159522476,
+          "max_dd": -0.13618792991292553,
+          "n_trading_days": 127
+        },
+        {
+          "year": 2020,
+          "quarter": "H1",
+          "cutoff": "2019-12-31",
+          "start": "2020-01-01",
+          "end": "2020-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.6242082548603856,
+          "sharpe": 4.954507304222819,
+          "max_dd": -0.11378773075724823,
+          "n_trading_days": 123
+        },
+        {
+          "year": 2020,
+          "quarter": "H2",
+          "cutoff": "2020-06-30",
+          "start": "2020-07-01",
+          "end": "2020-12-31",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 88.0,
+          "cum_return": -0.012939726741782787,
+          "sharpe": -0.19041053690499754,
+          "max_dd": -0.05511063705060095,
+          "n_trading_days": 129
+        },
+        {
+          "year": 2021,
+          "quarter": "H1",
+          "cutoff": "2020-12-31",
+          "start": "2021-01-01",
+          "end": "2021-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.35070948254734247,
+          "sharpe": 1.8934218442954514,
+          "max_dd": -0.2273099361062152,
+          "n_trading_days": 124
+        },
+        {
+          "year": 2021,
+          "quarter": "H2",
+          "cutoff": "2021-06-30",
+          "start": "2021-07-01",
+          "end": "2021-12-31",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 88.0,
+          "cum_return": 0.19472083825624953,
+          "sharpe": 1.5370595115799346,
+          "max_dd": -0.15961756778427724,
+          "n_trading_days": 130
+        },
+        {
+          "year": 2022,
+          "quarter": "H1",
+          "cutoff": "2021-12-31",
+          "start": "2022-01-01",
+          "end": "2022-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.06500414184949377,
+          "sharpe": 0.54566572204162,
+          "max_dd": -0.13045707287056482,
+          "n_trading_days": 125
+        },
+        {
+          "year": 2022,
+          "quarter": "H2",
+          "cutoff": "2022-06-30",
+          "start": "2022-07-01",
+          "end": "2022-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": -0.10601240734248651,
+          "sharpe": -0.45413850787476884,
+          "max_dd": -0.24627569365602656,
+          "n_trading_days": 129
+        },
+        {
+          "year": 2023,
+          "quarter": "H1",
+          "cutoff": "2022-12-31",
+          "start": "2023-01-01",
+          "end": "2023-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.1075942040232476,
+          "sharpe": 0.7920207099448403,
+          "max_dd": -0.17385427724568847,
+          "n_trading_days": 124
+        },
+        {
+          "year": 2023,
+          "quarter": "H2",
+          "cutoff": "2023-06-30",
+          "start": "2023-07-01",
+          "end": "2023-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 120.0,
+          "cum_return": -0.305363721744739,
+          "sharpe": -1.4553615901682173,
+          "max_dd": -0.34652761088788914,
+          "n_trading_days": 127
+        },
+        {
+          "year": 2024,
+          "quarter": "H1",
+          "cutoff": "2023-12-31",
+          "start": "2024-01-01",
+          "end": "2024-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.6700057545719349,
+          "sharpe": 3.9294658816892003,
+          "max_dd": -0.1440557998504233,
+          "n_trading_days": 123
+        },
+        {
+          "year": 2024,
+          "quarter": "H2",
+          "cutoff": "2024-06-30",
+          "start": "2024-07-01",
+          "end": "2024-12-31",
+          "n_positions": 5,
+          "n_swapped": 3,
+          "turnover_pct": 60.0,
+          "cost_bps": 88.0,
+          "cum_return": 0.12982420817918983,
+          "sharpe": 0.6780151041714602,
+          "max_dd": -0.15093965929640774,
+          "n_trading_days": 127
+        },
+        {
+          "year": 2025,
+          "quarter": "H1",
+          "cutoff": "2024-12-31",
+          "start": "2025-01-01",
+          "end": "2025-06-30",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 40.0,
+          "cum_return": 0.03061495984139384,
+          "sharpe": 0.13549974290440558,
+          "max_dd": -0.3465119053441914,
+          "n_trading_days": 122
+        },
+        {
+          "year": 2025,
+          "quarter": "H2",
+          "cutoff": "2025-06-30",
+          "start": "2025-07-01",
+          "end": "2025-12-31",
+          "n_positions": 5,
+          "n_swapped": 4,
+          "turnover_pct": 80.0,
+          "cost_bps": 104.0,
+          "cum_return": 0.36914593929682593,
+          "sharpe": 1.619981565677997,
+          "max_dd": -0.29759923180465236,
+          "n_trading_days": 127
+        }
+      ],
+      "total_costs_bps": 1504.0,
+      "rebalance_freq": 2
+    },
+    "annual": {
+      "per_year": {
+        "2015": {
+          "long_only": {
+            "cumulative_return": 0.324186670773672,
+            "annualized_return": 0.3256688923361215,
+            "volatility": 0.36673615715350605,
+            "sharpe_ratio": 0.8880195911520258,
+            "max_drawdown": -0.2678238469318368,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.0738070001888056,
+            "annualized_return": 0.07441890322797806,
+            "volatility": 0.12028072356272548,
+            "sharpe_ratio": 0.6187101392782125,
+            "max_drawdown": -0.1058915042584586,
+            "n_trading_days": 250
+          },
+          "costs_bps": 80.0
+        },
+        "2016": {
+          "long_only": {
+            "cumulative_return": 0.2254048053306168,
+            "annualized_return": 0.2234450390122078,
+            "volatility": 0.18966214216839364,
+            "sharpe_ratio": 1.1781214556451631,
+            "max_drawdown": -0.09308326386686183,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": 0.10554796302613778,
+            "annualized_return": 0.10510958393369663,
+            "volatility": 0.107287810578438,
+            "sharpe_ratio": 0.9796973520757153,
+            "max_drawdown": -0.0838726520617263,
+            "n_trading_days": 253
+          },
+          "costs_bps": 80.0
+        },
+        "2017": {
+          "long_only": {
+            "cumulative_return": 0.33343450012344156,
+            "annualized_return": 0.3349640873923492,
+            "volatility": 0.2477644932309701,
+            "sharpe_ratio": 1.3519454826809674,
+            "max_drawdown": -0.21586255863944032,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.2101564687094737,
+            "annualized_return": 0.21200457397326367,
+            "volatility": 0.06608039717434372,
+            "sharpe_ratio": 3.2082823808385985,
+            "max_drawdown": -0.03003721029516295,
+            "n_trading_days": 250
+          },
+          "costs_bps": 80.0
+        },
+        "2018": {
+          "long_only": {
+            "cumulative_return": -0.14521425591321346,
+            "annualized_return": -0.14682862918530748,
+            "volatility": 0.25085378458520896,
+            "sharpe_ratio": -0.5853155830520601,
+            "max_drawdown": -0.3514741899144568,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": -0.19450704003117025,
+            "annualized_return": -0.1973122855143825,
+            "volatility": 0.11280455988785358,
+            "sharpe_ratio": -1.7491516806638279,
+            "max_drawdown": -0.23747309458196159,
+            "n_trading_days": 248
+          },
+          "costs_bps": 80.0
+        },
+        "2019": {
+          "long_only": {
+            "cumulative_return": 0.7251752430089726,
+            "annualized_return": 0.736547349435583,
+            "volatility": 0.4691012382277487,
+            "sharpe_ratio": 1.5701245049325347,
+            "max_drawdown": -0.2034091379139165,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": 0.21463098857405183,
+            "annualized_return": 0.2184462137038703,
+            "volatility": 0.08645835956378377,
+            "sharpe_ratio": 2.526606042562187,
+            "max_drawdown": -0.06868097091245393,
+            "n_trading_days": 248
+          },
+          "costs_bps": 80.0
+        },
+        "2020": {
+          "long_only": {
+            "cumulative_return": 0.7208526604078749,
+            "annualized_return": 0.7208526604078749,
+            "volatility": 0.29118725460265027,
+            "sharpe_ratio": 2.4755639163930425,
+            "max_drawdown": -0.11378773075724823,
+            "n_trading_days": 252
+          },
+          "benchmark": {
+            "cumulative_return": 0.0489476085762508,
+            "annualized_return": 0.04914733460898035,
+            "volatility": 0.193443882854782,
+            "sharpe_ratio": 0.2540650750164851,
+            "max_drawdown": -0.28886748430032766,
+            "n_trading_days": 251
+          },
+          "costs_bps": 80.0
+        },
+        "2021": {
+          "long_only": {
+            "cumulative_return": 0.27796470255973404,
+            "annualized_return": 0.27549901506155816,
+            "volatility": 0.37615046751369036,
+            "sharpe_ratio": 0.7324170481099591,
+            "max_drawdown": -0.2714911866296149,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": 0.1664289390648266,
+            "annualized_return": 0.16571939958139104,
+            "volatility": 0.08999793426713432,
+            "sharpe_ratio": 1.8413689261966637,
+            "max_drawdown": -0.06650538151758476,
+            "n_trading_days": 253
+          },
+          "costs_bps": 80.0
+        },
+        "2022": {
+          "long_only": {
+            "cumulative_return": 0.10914793722842053,
+            "annualized_return": 0.1082435898891787,
+            "volatility": 0.22739970429570028,
+            "sharpe_ratio": 0.476005851566208,
+            "max_drawdown": -0.24773176611836123,
+            "n_trading_days": 254
+          },
+          "benchmark": {
+            "cumulative_return": -0.16541268298342326,
+            "annualized_return": -0.16481599416204085,
+            "volatility": 0.15889626809250024,
+            "sharpe_ratio": -1.0372552869907208,
+            "max_drawdown": -0.24512495623882094,
+            "n_trading_days": 253
+          },
+          "costs_bps": 80.0
+        },
+        "2023": {
+          "long_only": {
+            "cumulative_return": 0.16597589728029938,
+            "annualized_return": 0.16668944386330975,
+            "volatility": 0.2749046406311606,
+            "sharpe_ratio": 0.6063536922498041,
+            "max_drawdown": -0.26412052770568895,
+            "n_trading_days": 251
+          },
+          "benchmark": {
+            "cumulative_return": 0.02368056925338946,
+            "annualized_return": 0.023872257330703084,
+            "volatility": 0.09844867805932539,
+            "sharpe_ratio": 0.24248428522643656,
+            "max_drawdown": -0.1320811011778513,
+            "n_trading_days": 250
+          },
+          "costs_bps": 80.0
+        },
+        "2024": {
+          "long_only": {
+            "cumulative_return": 0.48395157741261485,
+            "annualized_return": 0.4886448099292555,
+            "volatility": 0.45153263175276726,
+            "sharpe_ratio": 1.082191575019563,
+            "max_drawdown": -0.267866490604809,
+            "n_trading_days": 250
+          },
+          "benchmark": {
+            "cumulative_return": 0.04730467463944277,
+            "annualized_return": 0.047888045536433,
+            "volatility": 0.08895475072359597,
+            "sharpe_ratio": 0.5383416304007506,
+            "max_drawdown": -0.09074318011181044,
+            "n_trading_days": 249
+          },
+          "costs_bps": 80.0
+        },
+        "2025": {
+          "long_only": {
+            "cumulative_return": 0.2029248151646137,
+            "annualized_return": 0.20560547834558163,
+            "volatility": 0.43807893154781313,
+            "sharpe_ratio": 0.4693343220573055,
+            "max_drawdown": -0.3465119053441914,
+            "n_trading_days": 249
+          },
+          "benchmark": {
+            "cumulative_return": 0.11337171209787877,
+            "annualized_return": 0.11530190454020284,
+            "volatility": 0.11659762812639475,
+            "sharpe_ratio": 0.9888872217470212,
+            "max_drawdown": -0.13442352917212602,
+            "n_trading_days": 248
+          },
+          "costs_bps": 80.0
+        }
+      },
+      "quarterly_detail": [
+        {
+          "year": 2015,
+          "quarter": "FY",
+          "cutoff": "2014-12-31",
+          "start": "2015-01-01",
+          "end": "2015-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.324186670773672,
+          "sharpe": 0.8880195911520258,
+          "max_dd": -0.2678238469318368,
+          "n_trading_days": 251
+        },
+        {
+          "year": 2016,
+          "quarter": "FY",
+          "cutoff": "2015-12-31",
+          "start": "2016-01-01",
+          "end": "2016-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.2254048053306168,
+          "sharpe": 1.1781214556451631,
+          "max_dd": -0.09308326386686183,
+          "n_trading_days": 254
+        },
+        {
+          "year": 2017,
+          "quarter": "FY",
+          "cutoff": "2016-12-31",
+          "start": "2017-01-01",
+          "end": "2017-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.33343450012344156,
+          "sharpe": 1.3519454826809674,
+          "max_dd": -0.21586255863944032,
+          "n_trading_days": 251
+        },
+        {
+          "year": 2018,
+          "quarter": "FY",
+          "cutoff": "2017-12-31",
+          "start": "2018-01-01",
+          "end": "2018-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": -0.14521425591321346,
+          "sharpe": -0.5853155830520601,
+          "max_dd": -0.3514741899144568,
+          "n_trading_days": 249
+        },
+        {
+          "year": 2019,
+          "quarter": "FY",
+          "cutoff": "2018-12-31",
+          "start": "2019-01-01",
+          "end": "2019-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.7251752430089726,
+          "sharpe": 1.5701245049325347,
+          "max_dd": -0.2034091379139165,
+          "n_trading_days": 249
+        },
+        {
+          "year": 2020,
+          "quarter": "FY",
+          "cutoff": "2019-12-31",
+          "start": "2020-01-01",
+          "end": "2020-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.7208526604078749,
+          "sharpe": 2.4755639163930425,
+          "max_dd": -0.11378773075724823,
+          "n_trading_days": 252
+        },
+        {
+          "year": 2021,
+          "quarter": "FY",
+          "cutoff": "2020-12-31",
+          "start": "2021-01-01",
+          "end": "2021-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.27796470255973404,
+          "sharpe": 0.7324170481099591,
+          "max_dd": -0.2714911866296149,
+          "n_trading_days": 254
+        },
+        {
+          "year": 2022,
+          "quarter": "FY",
+          "cutoff": "2021-12-31",
+          "start": "2022-01-01",
+          "end": "2022-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.10914793722842053,
+          "sharpe": 0.476005851566208,
+          "max_dd": -0.24773176611836123,
+          "n_trading_days": 254
+        },
+        {
+          "year": 2023,
+          "quarter": "FY",
+          "cutoff": "2022-12-31",
+          "start": "2023-01-01",
+          "end": "2023-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.16597589728029938,
+          "sharpe": 0.6063536922498041,
+          "max_dd": -0.26412052770568895,
+          "n_trading_days": 251
+        },
+        {
+          "year": 2024,
+          "quarter": "FY",
+          "cutoff": "2023-12-31",
+          "start": "2024-01-01",
+          "end": "2024-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.48395157741261485,
+          "sharpe": 1.082191575019563,
+          "max_dd": -0.267866490604809,
+          "n_trading_days": 250
+        },
+        {
+          "year": 2025,
+          "quarter": "FY",
+          "cutoff": "2024-12-31",
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "n_positions": 5,
+          "n_swapped": 5,
+          "turnover_pct": 100.0,
+          "cost_bps": 80.0,
+          "cum_return": 0.2029248151646137,
+          "sharpe": 0.4693343220573055,
+          "max_dd": -0.3465119053441914,
+          "n_trading_days": 249
+        }
+      ],
+      "total_costs_bps": 880.0,
+      "rebalance_freq": 4
+    }
+  }
+}
