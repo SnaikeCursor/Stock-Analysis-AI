@@ -1,6 +1,10 @@
-# Cached market data
+# Cached market data (bulk OHLCV/fundamentals/DB excluded, trained models kept for deploy)
 data/*
 !data/.gitkeep
+!data/cache/
+data/cache/*
+!data/cache/regression_wf_*_cs_pit_lag60.joblib
+!data/cache/wf_evaluation_results.json
 
 # Python
 __pycache__/

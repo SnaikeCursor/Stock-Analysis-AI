@@ -17,3 +17,11 @@ notebooks
 .DS_Store
 .cursor
 terminals
+
+# Exclude bulk data but keep pre-trained Lag60-SA model caches for image seeding.
+# Order matters: exclude parent → re-include child → exclude grandchild → re-include specific files.
+data/*
+!data/cache
+data/cache/*
+!data/cache/regression_wf_*_cs_pit_lag60.joblib
+!data/cache/wf_evaluation_results.json

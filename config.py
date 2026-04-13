@@ -127,6 +127,13 @@ CV_FOLDS: int = 5
 EULERPOOL_API_KEY: str = os.environ.get("EULERPOOL_API_KEY", "")
 EULERPOOL_BASE_URL: str = "https://api.eulerpool.com/api/1"
 
+# --- Email Notifications ---
+NOTIFY_EMAIL_TO: str = os.environ.get("NOTIFY_EMAIL_TO", "")
+SMTP_HOST: str = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT: int = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER: str = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD: str = os.environ.get("SMTP_PASSWORD", "")
+
 
 def get_period_by_label(label: str) -> tuple[str, str, str, str]:
     """Look up a classification period by its label (e.g. ``'Q1-2024'``)."""

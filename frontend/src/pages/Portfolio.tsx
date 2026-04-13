@@ -98,6 +98,7 @@ export function PortfolioPage() {
   const [exitDate, setExitDate] = useState('')
 
   // --- Signal wizard state ---
+  const [signalCutoffDate, setSignalCutoffDate] = useState(todayIso)
   const [investAmountRaw, setInvestAmountRaw] = useState('')
   const [generatedSignal, setGeneratedSignal] = useState<SignalOut | null>(null)
   const [applyResult, setApplyResult] = useState<ApplySignalResponse | null>(null)
@@ -236,7 +237,7 @@ export function PortfolioPage() {
 
   const handleGenerateSignal = () => {
     setApplyResult(null)
-    generateMut.mutate({ cutoff_date: todayIso() })
+    generateMut.mutate({ cutoff_date: signalCutoffDate })
   }
 
   const handleApplySignal = () => {
@@ -378,11 +379,23 @@ export function PortfolioPage() {
             Signal generieren & investieren
           </CardTitle>
           <CardDescription>
-            Generiere ein neues Trading-Signal und kaufe die empfohlenen Positionen direkt ins Portfolio.
+            Generiere ein Trading-Signal fuer ein beliebiges Cutoff-Datum (Standard: heute) und kaufe die empfohlenen Positionen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground" htmlFor="signal-cutoff">
+                Cutoff-Datum
+              </label>
+              <input
+                id="signal-cutoff"
+                type="date"
+                className={cn(inputClass, 'w-40')}
+                value={signalCutoffDate}
+                onChange={(e) => setSignalCutoffDate(e.target.value)}
+              />
+            </div>
             <Button
               size="sm"
               onClick={handleGenerateSignal}
@@ -394,6 +407,14 @@ export function PortfolioPage() {
                 <Sparkles className="mr-1 size-3.5" />
               )}
               Signal generieren
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSignalCutoffDate(todayIso())}
+              disabled={signalCutoffDate === todayIso()}
+            >
+              Heute
             </Button>
             {generateMut.isError && (
               <p className="text-sm text-destructive">

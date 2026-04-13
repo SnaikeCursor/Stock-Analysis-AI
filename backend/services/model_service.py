@@ -124,11 +124,7 @@ def _find_latest_regression_model() -> tuple[Path, int]:
     the newest available model.
     """
     cache_dir = config.DATA_DIR / "cache"
-    if not cache_dir.exists():
-        raise FileNotFoundError(
-            f"Cache directory not found at {cache_dir}. "
-            "Run `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` to train."
-        )
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
     candidates: list[tuple[Path, int, int]] = []
     for suffix_priority, suffix in enumerate(_MODEL_SUFFIXES):
@@ -304,11 +300,7 @@ class ModelService:
         import joblib
 
         cache_dir = config.DATA_DIR / "cache"
-        if not cache_dir.exists():
-            raise FileNotFoundError(
-                f"Cache directory not found at {cache_dir}. "
-                "Run `python robustness_test.py --quarterly --cs-norm --pub-lag 60 --use-cache` to train."
-            )
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
         available: dict[int, tuple[Path, RegressionTrainResult]] = {}
         for suffix in _MODEL_SUFFIXES:

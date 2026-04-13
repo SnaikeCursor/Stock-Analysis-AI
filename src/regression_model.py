@@ -168,7 +168,9 @@ def _apply_imputation(
     """Apply pre-computed medians and align to training feature order."""
     common = [c for c in feature_names if c in X.columns]
     out = X[common].copy()
+    out = out.replace([np.inf, -np.inf], np.nan)
     out = out.fillna(medians.reindex(common))
+    out = out.fillna(0.0)
     for c in feature_names:
         if c not in out.columns:
             out[c] = 0.0
