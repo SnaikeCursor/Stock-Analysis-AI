@@ -26,11 +26,13 @@ COPY backend ./backend
 
 # Bake pre-trained Lag60-SA regression models into the image so a fresh
 # volume mount is automatically seeded on first start (entrypoint.sh).
-COPY data/cache/regression_wf_*_cs_pit_lag60.joblib data_seed/cache/
-COPY data/cache/wf_evaluation_results.json data_seed/cache/
+# Copy the whole cache dir (filtered by .dockerignore to just the model
+# caches + wf_evaluation_results.json) so the build never fails on a
+# zero-match glob if a file is missing.
+COPY data/cache/ data_seed/cache/
 
 # Persist SQLite, joblib models, OHLCV parquet under ./data (bind mount or volume)
-RUN mkdir -p data/cache
+RUN mkdir -p data/cache data_seed/cache
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
