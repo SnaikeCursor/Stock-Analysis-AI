@@ -22,6 +22,7 @@ _yf_download_lock = threading.Lock()
 __all__ = [
     "download_ohlcv",
     "download_spi_universe",
+    "fetch_live_closes",
     "load_fundamentals",
     "default_cache_dir",
 ]
@@ -113,6 +114,47 @@ def _cache_covers_end(
 def _read_ohlcv_parquet(path: Path) -> pd.DataFrame:
     df = pd.read_parquet(path)
     return _normalize_ohlcv_index(_flatten_yf_ohlcv_columns(df))
+
+
+def fetch_live_closes(
+    tickers: list[str],
+    *,
+    lookback_days: int = 10,
+) -> dict[str, tuple[float, date]]:
+    """Fetch the latest daily close for *tickers* directly from Yahoo Finance.
+
+    Uses ``Ticker.history`` (small per-ticker requests) instead of the bulk
+    cache downloader — more reliable from cloud hosts where batch jobs fail.
+    """
+    if not tickers:
+        return {}
+
+    unique = list(dict.fromkeys(tickers))
+    out: dict[str, tuple[float, date]] = {}
+
+    for ticker in unique:
+        try:
+            with _yf_download_lock:
+                raw = yf.Ticker(ticker).history(
+                    period=f"{lookback_days}d",
+                    auto_adjust=False,
+                )
+        except Exception as exc:
+            logger.warning("Live close fetch failed for %s: %s", ticker, exc)
+            continue
+
+        if raw is None or raw.empty:
+            logger.debug("Live close fetch returned empty for %s", ticker)
+            continue
+
+        df = _normalize_ohlcv_index(_flatten_yf_ohlcv_columns(raw))
+        if not _ohlcv_frame_valid(df):
+            continue
+
+        last_ts = pd.Timestamp(df.index[-1])
+        out[ticker] = (float(df["Close"].iloc[-1]), last_ts.date())
+
+    return out
 
 
 def _download_ohlcv_single(

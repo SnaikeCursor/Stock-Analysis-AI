@@ -15,7 +15,7 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,7 @@ from src.backtest import (
     evaluate_forward_quarterly_regression,
 )
 from src.features import MACRO_BENCHMARK_TICKER, build_feature_matrix
+from src.data_loader import fetch_live_closes
 from src.regression_model import (
     RegressionTrainResult,
     predict_returns,
@@ -382,6 +383,31 @@ class ModelService:
         """
         result = self.load_model()
         self._data.ensure_data_covers(cutoff_date)
+        data_end = self._data.data_end_date()
+        cutoff_d = date.fromisoformat(cutoff_date)
+        if data_end is not None and data_end < cutoff_d - timedelta(days=3):
+            logger.warning(
+                "Signal cutoff %s but OHLCV ends %s — patching with live Yahoo quotes",
+                cutoff_date,
+                data_end,
+            )
+            liquid = self._data.get_liquid_tickers()
+            live = fetch_live_closes(liquid)
+            if live:
+                self._data._merge_live_closes_into_cache(live)
+                data_end = self._data.data_end_date()
+                logger.info(
+                    "Patched %d tickers with live closes — OHLCV data_end=%s",
+                    len(live),
+                    data_end,
+                )
+            else:
+                logger.warning(
+                    "Live Yahoo patch failed — features may use stale prices through %s",
+                    data_end,
+                )
+        else:
+            logger.info("OHLCV covers cutoff %s (data_end=%s)", cutoff_date, data_end)
         ohlcv = self._data.ohlcv
         fundamentals = self._data.fundamentals
         eulerpool_q = self._data.eulerpool_quarterly

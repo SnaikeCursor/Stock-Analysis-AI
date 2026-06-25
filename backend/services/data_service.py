@@ -20,7 +20,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import config
-from src.data_loader import default_cache_dir, download_ohlcv, load_fundamentals
+from src.data_loader import (
+    default_cache_dir,
+    download_ohlcv,
+    fetch_live_closes,
+    load_fundamentals,
+)
 from src.features import MACRO_BENCHMARK_TICKER
 from src.universe import SPI_TICKERS, filter_by_min_volume, get_spi_tickers
 
@@ -88,16 +93,49 @@ class DataService:
     def refresh_ohlcv(self, *, force_download: bool = True) -> int:
         """Download or refresh OHLCV data for the full SPI universe.
 
-        Parameters
-        ----------
-        force_download
-            When True (default), fetch missing bars up to today and merge into
-            the Parquet cache. When False, load from disk only.
-
-        Returns the number of tickers loaded after filtering.
+        When data is already loaded, only OHLCV is refreshed (no Eulerpool round-trip).
         """
         yf_end = config.get_yf_end()
+        if self._loaded:
+            tickers = list(dict.fromkeys([*SPI_TICKERS, MACRO_BENCHMARK_TICKER]))
+            return self._refresh_ohlcv_only(
+                tickers,
+                force_refresh=force_download,
+                yf_end=yf_end,
+            )
         return self._do_load(force_refresh=force_download, yf_end_override=yf_end)
+
+    def get_latest_closes_for_tickers(
+        self,
+        tickers: list[str],
+    ) -> dict[str, tuple[float | None, str | None]]:
+        """Return ``ticker → (close, ISO date)`` using a live Yahoo fetch with cache fallback."""
+        if not tickers:
+            return {}
+
+        if not self._loaded:
+            self.load_cached()
+
+        live = fetch_live_closes(tickers)
+        self._merge_live_closes_into_cache(live)
+
+        out: dict[str, tuple[float | None, str | None]] = {}
+        for ticker in tickers:
+            if ticker in live:
+                price, as_of = live[ticker]
+                out[ticker] = (round(price, 2), as_of.isoformat())
+                continue
+            try:
+                df = self.get_ticker_price(ticker)
+                if not df.empty and "Close" in df.columns:
+                    last_ts = pd.Timestamp(df.index[-1])
+                    out[ticker] = (round(float(df["Close"].iloc[-1]), 2), last_ts.date().isoformat())
+                else:
+                    out[ticker] = (None, None)
+            except (KeyError, Exception) as exc:
+                logger.debug("Cached price lookup failed for %s: %s", ticker, exc)
+                out[ticker] = (None, None)
+        return out
 
     def get_ticker_price(
         self,
@@ -164,11 +202,13 @@ class DataService:
             return pd.Timestamp(first.index[-1]).date()
         return None
 
-    def ensure_data_covers(self, target_date: str) -> None:
+    def ensure_data_covers(self, target_date: str, *, tickers: list[str] | None = None) -> None:
         """Re-download OHLCV if the cached data doesn't reach *target_date*.
 
         Allows a 3-day grace window for weekends / holidays (e.g. requesting
         Monday when the last data point is Friday is fine).
+
+        When *tickers* is set, only those symbols (plus ^SSMI) are refreshed.
         """
         if not self._loaded:
             self.load_cached()
@@ -182,11 +222,35 @@ class DataService:
 
         fetch_through = max(target, date.today()) + timedelta(days=config.YF_END_BUFFER_DAYS)
         new_yf_end = fetch_through.isoformat()
-        logger.info(
-            "Data ends at %s but need %s — refreshing OHLCV (YF_END=%s)",
-            end, target, new_yf_end,
+        refresh_tickers = (
+            list(dict.fromkeys([*tickers, MACRO_BENCHMARK_TICKER]))
+            if tickers
+            else list(dict.fromkeys([*SPI_TICKERS, MACRO_BENCHMARK_TICKER]))
         )
-        self._do_load(force_refresh=True, yf_end_override=new_yf_end)
+        logger.info(
+            "Data ends at %s but need %s — refreshing OHLCV for %d tickers (YF_END=%s)",
+            end,
+            target,
+            len(refresh_tickers),
+            new_yf_end,
+        )
+        if self._loaded:
+            self._refresh_ohlcv_only(
+                refresh_tickers,
+                force_refresh=True,
+                yf_end=new_yf_end,
+            )
+        else:
+            self._do_load(force_refresh=True, yf_end_override=new_yf_end)
+
+        new_end = self.data_end_date()
+        if new_end is not None and new_end < target - grace:
+            logger.warning(
+                "OHLCV still stale after refresh: have %s, need %s (tickers=%d)",
+                new_end,
+                target,
+                len(refresh_tickers),
+            )
 
     # ------------------------------------------------------------------
     # Internal
@@ -258,3 +322,62 @@ class DataService:
         self._loaded = True
 
         return len(filtered)
+
+    def _refresh_ohlcv_only(
+        self,
+        tickers: list[str],
+        *,
+        force_refresh: bool,
+        yf_end: str,
+    ) -> int:
+        """Update OHLCV for *tickers* without reloading fundamentals / Eulerpool."""
+        unique = list(dict.fromkeys(tickers))
+        logger.info(
+            "Refreshing OHLCV only (%d tickers, force_refresh=%s, end=%s)",
+            len(unique),
+            force_refresh,
+            yf_end,
+        )
+
+        updated = download_ohlcv(
+            unique,
+            config.YF_START,
+            yf_end,
+            self._cache_dir,
+            force_refresh=force_refresh,
+        )
+
+        for ticker, df in updated.items():
+            if df is not None and not df.empty:
+                self._ohlcv[ticker] = df
+
+        if updated:
+            self._loaded = True
+
+        return len(updated)
+
+    def _merge_live_closes_into_cache(
+        self,
+        live: dict[str, tuple[float, date]],
+    ) -> None:
+        """Append single-day bars from live quotes into in-memory OHLCV (+ Parquet)."""
+        from src.data_loader import _merge_ohlcv_frames, _ohlcv_cache_path
+
+        for ticker, (close, as_of) in live.items():
+            ts = pd.Timestamp(as_of)
+            bar = pd.DataFrame(
+                {"Close": [close], "Open": [close], "High": [close], "Low": [close], "Volume": [0.0]},
+                index=pd.DatetimeIndex([ts]),
+            )
+            existing = self._ohlcv.get(ticker)
+            if existing is not None and not existing.empty:
+                merged = _merge_ohlcv_frames(existing, bar)
+            else:
+                merged = bar
+            self._ohlcv[ticker] = merged
+            path = _ohlcv_cache_path(self._cache_dir, ticker)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                merged.to_parquet(path, index=True)
+            except Exception as exc:
+                logger.debug("Could not persist live bar for %s: %s", ticker, exc)

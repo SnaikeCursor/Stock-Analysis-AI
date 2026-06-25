@@ -158,6 +158,7 @@ export type SignalPosition = {
   weight: number
   predicted_return: number
   current_price?: number | null
+  price_as_of?: string | null
 }
 
 export type SignalOut = {
@@ -168,6 +169,7 @@ export type SignalOut = {
   created_at: string | null
   model_phase?: string
   rebalance_freq?: string
+  ohlcv_data_end?: string | null
   /** Requested long count; may exceed len(portfolio) if coverage is thin. */
   requested_top_n?: number | null
 }

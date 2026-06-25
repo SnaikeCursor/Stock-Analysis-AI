@@ -425,13 +425,20 @@ export function PortfolioPage() {
 
           {generatedSignal && (
             <div className="space-y-4 rounded-md border p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-medium">
                   Signal #{generatedSignal.id} — {generatedSignal.cutoff_date}
                 </h3>
-                <Badge variant="secondary">
-                  {generatedSignal.portfolio.length} Positionen
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  {generatedSignal.ohlcv_data_end && (
+                    <span className="text-xs text-muted-foreground">
+                      Modell-Daten bis {generatedSignal.ohlcv_data_end}
+                    </span>
+                  )}
+                  <Badge variant="secondary">
+                    {generatedSignal.portfolio.length} Positionen
+                  </Badge>
+                </div>
               </div>
 
               <SignalRecommendationTable
@@ -721,7 +728,12 @@ function SignalRecommendationTable({
               <TableCell className="font-mono font-medium">{p.ticker}</TableCell>
               <TableCell className="text-right tabular-nums">{fmtWeight(p.weight)}</TableCell>
               <TableCell className="text-right tabular-nums">{fmtPct(p.predicted_return)}</TableCell>
-              <TableCell className="text-right tabular-nums">{fmtChf(p.current_price)}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                <div>{fmtChf(p.current_price)}</div>
+                {p.price_as_of && (
+                  <div className="text-xs text-muted-foreground">{p.price_as_of}</div>
+                )}
+              </TableCell>
               {investAmount > 0 && (
                 <>
                   <TableCell className="text-right tabular-nums">{fmtChf(notional)}</TableCell>

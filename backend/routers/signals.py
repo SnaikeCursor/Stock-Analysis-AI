@@ -43,7 +43,11 @@ class PositionOut(BaseModel):
     )
     current_price: float | None = Field(
         None,
-        description="Latest close from cached OHLCV (set on generate for share sizing).",
+        description="Latest daily close from Yahoo Finance.",
+    )
+    price_as_of: str | None = Field(
+        None,
+        description="ISO date of the close used for current_price.",
     )
 
 
@@ -55,6 +59,10 @@ class SignalOut(BaseModel):
     created_at: str | None = None
     model_phase: str = "Lag60-SA"
     rebalance_freq: str = "semi-annual"
+    ohlcv_data_end: str | None = Field(
+        None,
+        description="Last OHLCV bar date used for feature computation.",
+    )
     requested_top_n: int | None = Field(
         None,
         description="Requested long count; may exceed len(portfolio) if data coverage is thin.",
@@ -100,9 +108,10 @@ async def generate_signal(
     )
 
     tickers = [p["ticker"] for p in result.portfolio]
-    price_map = await asyncio.to_thread(
-        portfolio_svc.get_current_prices_for_tickers, tickers,
+    quotes = await asyncio.to_thread(
+        portfolio_svc.get_price_quotes_for_tickers, tickers,
     )
+    ohlcv_end = model_svc._data.data_end_date()
 
     return SignalOut(
         id=signal.id,
@@ -112,12 +121,14 @@ async def generate_signal(
                 ticker=p["ticker"],
                 weight=p["weight"],
                 predicted_return=p.get("predicted_return", 0.0),
-                current_price=price_map.get(p["ticker"]),
+                current_price=quotes.get(p["ticker"], (None, None))[0],
+                price_as_of=quotes.get(p["ticker"], (None, None))[1],
             )
             for p in result.portfolio
         ],
         status=signal.status.value if hasattr(signal.status, "value") else signal.status,
         created_at=signal.created_at.isoformat() if signal.created_at else None,
+        ohlcv_data_end=ohlcv_end.isoformat() if ohlcv_end else None,
         requested_top_n=result.requested_top_n,
     )
 

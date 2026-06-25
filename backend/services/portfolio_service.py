@@ -139,22 +139,16 @@ class PortfolioService:
         return signal
 
     def get_current_prices_for_tickers(self, tickers: list[str]) -> dict[str, float | None]:
-        """Latest close from cached OHLCV per ticker; ``None`` if unavailable."""
-        if not tickers:
-            return {}
-        self._data.ensure_data_covers(date.today().isoformat())
-        out: dict[str, float | None] = {}
-        for t in tickers:
-            try:
-                df = self._data.get_ticker_price(t)
-                if not df.empty and "Close" in df.columns:
-                    out[t] = round(float(df["Close"].iloc[-1]), 2)
-                else:
-                    out[t] = None
-            except (KeyError, Exception) as exc:
-                logger.debug("Price lookup failed for %s: %s", t, exc)
-                out[t] = None
-        return out
+        """Latest close per ticker via live Yahoo fetch (cache fallback)."""
+        quotes = self._data.get_latest_closes_for_tickers(tickers)
+        return {t: q[0] for t, q in quotes.items()}
+
+    def get_price_quotes_for_tickers(
+        self,
+        tickers: list[str],
+    ) -> dict[str, tuple[float | None, str | None]]:
+        """Latest close and as-of date per ticker."""
+        return self._data.get_latest_closes_for_tickers(tickers)
 
     async def get_latest_signal(self, session: AsyncSession) -> Signal | None:
         """Return the most recent active signal, or ``None``."""
