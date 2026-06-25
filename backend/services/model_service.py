@@ -392,7 +392,7 @@ class ModelService:
                 data_end,
             )
             liquid = self._data.get_liquid_tickers()
-            live = fetch_live_closes(liquid)
+            live = fetch_live_closes([*liquid, MACRO_BENCHMARK_TICKER])
             if live:
                 self._data._merge_live_closes_into_cache(live)
                 data_end = self._data.data_end_date()
