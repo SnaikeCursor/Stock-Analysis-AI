@@ -32,7 +32,7 @@ COPY backend ./backend
 COPY data/cache/ data_seed/cache/
 
 # Persist SQLite, joblib models, OHLCV parquet under ./data (bind mount or volume)
-RUN mkdir -p data/cache data_seed/cache
+RUN mkdir -p data/cache data/ohlcv data_seed/cache data_seed/ohlcv
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

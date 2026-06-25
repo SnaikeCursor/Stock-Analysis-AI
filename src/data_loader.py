@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +86,30 @@ def _normalize_ohlcv_index(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _merge_ohlcv_frames(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
+    """Combine cached and newly downloaded bars; later rows win on duplicate dates."""
+    if existing.empty:
+        return new
+    if new.empty:
+        return existing
+    merged = pd.concat([existing, new]).sort_index()
+    return merged[~merged.index.duplicated(keep="last")]
+
+
+def _cache_covers_end(
+    cached_df: pd.DataFrame,
+    end: str,
+    *,
+    grace_days: int = 3,
+) -> bool:
+    """True when cached data reaches *end* (weekends/holidays allowed via grace)."""
+    if cached_df.empty:
+        return False
+    last = pd.Timestamp(cached_df.index.max()).date()
+    target = date.fromisoformat(end[:10])
+    return last >= target - timedelta(days=grace_days)
+
+
 def _read_ohlcv_parquet(path: Path) -> pd.DataFrame:
     df = pd.read_parquet(path)
     return _normalize_ohlcv_index(_flatten_yf_ohlcv_columns(df))
@@ -138,16 +163,30 @@ def _one_ticker_ohlcv_job(
 ) -> tuple[str, pd.DataFrame | None, str | None]:
     """Returns (ticker, frame or None, error message or None)."""
     path = _ohlcv_cache_path(cache_dir, ticker)
-    if not force_refresh and path.exists():
+    cached_df: pd.DataFrame | None = None
+    if path.exists():
         try:
-            df = _read_ohlcv_parquet(path)
-            if not df.empty:
-                return ticker, df, None
+            cached_df = _read_ohlcv_parquet(path)
+            if cached_df.empty:
+                cached_df = None
         except Exception as exc:
-            logger.warning("Parquet read failed for %s, re-downloading: %s", ticker, exc)
+            logger.warning("Parquet read failed for %s: %s", ticker, exc)
+            cached_df = None
+
+    if not force_refresh and cached_df is not None:
+        return ticker, cached_df, None
+
+    if cached_df is not None and _cache_covers_end(cached_df, end):
+        return ticker, cached_df, None
+
+    download_start = start
+    if cached_df is not None:
+        overlap = pd.Timedelta(days=7)
+        download_start = (cached_df.index.max() - overlap).strftime("%Y-%m-%d")
 
     try:
-        df = _download_ohlcv_single(ticker, start, end, retries=retries)
+        new_df = _download_ohlcv_single(ticker, download_start, end, retries=retries)
+        df = _merge_ohlcv_frames(cached_df, new_df) if cached_df is not None else new_df
         try:
             df.to_parquet(path, index=True)
         except Exception as exc:
@@ -155,6 +194,14 @@ def _one_ticker_ohlcv_job(
         return ticker, df, None
     except Exception as exc:
         msg = f"{type(exc).__name__}: {exc}"
+        if cached_df is not None:
+            logger.warning(
+                "OHLCV download failed for %s — using stale cache (last=%s): %s",
+                ticker,
+                cached_df.index.max(),
+                msg,
+            )
+            return ticker, cached_df, None
         logger.warning("OHLCV download failed for %s: %s", ticker, msg)
         return ticker, None, msg
 
@@ -262,7 +309,7 @@ def download_spi_universe(
         if _start is None:
             _start = cfg.YF_START
         if _end is None:
-            _end = cfg.YF_END
+            _end = cfg.get_yf_end()
 
     root = cache_dir if cache_dir is not None else default_cache_dir()
     # SMI index for macro regime features (see features.MACRO_BENCHMARK_TICKER); not a stock.

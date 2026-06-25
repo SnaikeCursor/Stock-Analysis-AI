@@ -6,6 +6,7 @@ Lookahead: features use only data strictly before the classification window.
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -25,7 +26,18 @@ SRC_DIR: Path = PROJECT_ROOT / "src"
 # 2010-01-01 gives ~2 years pre-roll (2010-2011) before Q1-2012, the first
 # classification period — sufficient for SMA(200) and other long-window indicators.
 YF_START: str = "2010-01-01"
-YF_END: str = "2025-12-31"
+# Days added to today for yfinance ``end`` (exclusive upper bound; buffer captures latest bar).
+YF_END_BUFFER_DAYS: int = 5
+
+
+def get_yf_end(*, buffer_days: int | None = None) -> str:
+    """Return the yfinance download end date for live pipelines (today + buffer)."""
+    buf = YF_END_BUFFER_DAYS if buffer_days is None else buffer_days
+    return (date.today() + timedelta(days=buf)).isoformat()
+
+
+# Backward-compatible default for notebooks; live services should call :func:`get_yf_end`.
+YF_END: str = get_yf_end()
 
 # --- Classification period (Q1 2024): performance label (legacy single-period) ---
 CLASS_Q_START: str = "2024-01-02"

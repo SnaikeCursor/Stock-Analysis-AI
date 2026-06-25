@@ -75,9 +75,19 @@ async def lifespan(app: FastAPI):
         """
         try:
             await asyncio.to_thread(data_service.load_cached)
-            logger.info("OHLCV cache loaded (%d tickers)", len(data_service.ohlcv))
+            logger.info(
+                "OHLCV cache loaded (%d tickers, data_end=%s)",
+                len(data_service.ohlcv),
+                data_service.data_end_date(),
+            )
+            n = await asyncio.to_thread(data_service.refresh_ohlcv, True)
+            logger.info(
+                "OHLCV refresh finished (%d tickers, data_end=%s)",
+                n,
+                data_service.data_end_date(),
+            )
         except Exception as exc:
-            logger.warning("Could not load OHLCV cache on startup: %s", exc)
+            logger.warning("Could not load/refresh OHLCV on startup: %s", exc)
 
         try:
             await asyncio.to_thread(model_service.load_model)
@@ -157,8 +167,10 @@ async def health():
         status = "degraded"
     else:
         status = "unavailable"
+    data_end = data_service.data_end_date()
     return {
         "status": status,
         "data_loaded": data_ok,
         "model_loaded": model_ok,
+        "data_end_date": data_end.isoformat() if data_end else None,
     }

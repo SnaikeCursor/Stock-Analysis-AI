@@ -57,7 +57,7 @@ def create_scheduler(
         try:
 
             def _refresh() -> int:
-                return data_service.refresh_ohlcv()
+                return data_service.refresh_ohlcv(force_download=True)
 
             n = await asyncio.to_thread(_refresh)
             logger.info("Scheduler: OHLCV refresh finished (%d tickers)", n)

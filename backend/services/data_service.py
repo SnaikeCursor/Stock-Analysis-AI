@@ -85,17 +85,19 @@ class DataService:
 
         return self._do_load(force_refresh=False)
 
-    def refresh_ohlcv(self, *, force_download: bool = False) -> int:
+    def refresh_ohlcv(self, *, force_download: bool = True) -> int:
         """Download or refresh OHLCV data for the full SPI universe.
 
         Parameters
         ----------
         force_download
-            If True, re-download from Yahoo even when cached Parquet exists.
+            When True (default), fetch missing bars up to today and merge into
+            the Parquet cache. When False, load from disk only.
 
         Returns the number of tickers loaded after filtering.
         """
-        return self._do_load(force_refresh=force_download)
+        yf_end = config.get_yf_end()
+        return self._do_load(force_refresh=force_download, yf_end_override=yf_end)
 
     def get_ticker_price(
         self,
@@ -178,7 +180,8 @@ class DataService:
         if end is not None and end >= target - grace:
             return
 
-        new_yf_end = (target + timedelta(days=5)).isoformat()
+        fetch_through = max(target, date.today()) + timedelta(days=config.YF_END_BUFFER_DAYS)
+        new_yf_end = fetch_through.isoformat()
         logger.info(
             "Data ends at %s but need %s — refreshing OHLCV (YF_END=%s)",
             end, target, new_yf_end,
@@ -198,7 +201,7 @@ class DataService:
         """Unified load path — download or cache-read, filter, load fundamentals."""
         tickers_with_macro = list(dict.fromkeys([*SPI_TICKERS, MACRO_BENCHMARK_TICKER]))
 
-        yf_end = yf_end_override or config.YF_END
+        yf_end = yf_end_override or config.get_yf_end()
 
         logger.info(
             "Loading OHLCV (%d tickers, force_refresh=%s, end=%s)",

@@ -8,7 +8,7 @@ SEED_DIR="/app/data_seed"
 DATA_DIR="/app/data"
 
 if [ -d "$SEED_DIR" ]; then
-    mkdir -p "$DATA_DIR/cache"
+    mkdir -p "$DATA_DIR/cache" "$DATA_DIR/ohlcv"
     for f in "$SEED_DIR/cache"/*; do
         [ -f "$f" ] || continue
         base=$(basename "$f")
@@ -17,6 +17,16 @@ if [ -d "$SEED_DIR" ]; then
             cp "$f" "$DATA_DIR/cache/$base"
         fi
     done
+    if [ -d "$SEED_DIR/ohlcv" ]; then
+        for f in "$SEED_DIR/ohlcv"/*; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            if [ ! -f "$DATA_DIR/ohlcv/$base" ]; then
+                echo "Seeding $DATA_DIR/ohlcv/$base from image …"
+                cp "$f" "$DATA_DIR/ohlcv/$base"
+            fi
+        done
+    fi
     echo "Model seed check complete."
 fi
 
